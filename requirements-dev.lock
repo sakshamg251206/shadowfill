@@ -1,0 +1,33 @@
+# Exact pins for reproducible CI and benchmark runs.
+# Regenerate with: pip install -e '.[dev]' && pip freeze --exclude-editable > requirements-dev.lock
+# Loose ranges live in pyproject.toml; `make install` uses those.
+ast_serialize==0.11.2
+cfgv==3.5.0
+distlib==0.4.3
+filelock==3.32.7
+hypothesis==6.168.0
+identify==2.6.19
+iniconfig==2.3.0
+librt==0.15.0
+mypy==2.3.1
+mypy_extensions==1.1.0
+nodeenv==1.10.0
+numpy==2.4.6
+packaging==26.3
+pandas==3.0.6
+pandas-stubs==3.0.5.260914
+pathspec==1.1.1
+platformdirs==4.11.10
+pluggy==1.6.0
+pre_commit==4.6.2
+pyarrow==25.0.1
+Pygments==2.21.0
+pytest==9.1.1
+python-dateutil==2.9.0.post0
+python-discovery==1.6.1
+PyYAML==6.0.3
+ruff==0.16.8
+six==1.17.0
+sortedcontainers==2.4.0
+typing_extensions==4.16.0
+virtualenv==21.7.14
