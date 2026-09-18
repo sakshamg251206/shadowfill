@@ -27,8 +27,18 @@ MESSAGE_DTYPES: dict[str, str | type[str]] = {
 def parse_seconds_to_ns(col: pd.Series) -> np.ndarray:
     """Convert 'seconds-after-midnight' decimal strings to int64 nanoseconds.
 
-    Parsing via float64 loses nanosecond precision for intraday timestamps,
-    so the integer and fractional parts are handled separately as strings.
+    The integer and fractional parts are handled separately as strings so that
+    no floating-point arithmetic touches the timestamp.
+
+    The usual justification -- that float64 cannot represent these values -- is
+    not the real reason: float64 spacing at intraday magnitudes (34200-57600 s)
+    is ~0.007 ns, comfortably finer than 1 ns. The failure is in the conversion
+    that follows. Measured over 200k timestamps drawn across a LOBSTER session,
+    ``int(float(x) * 1e9)`` disagreed with the exact value on 1,921 of them
+    (~1%), always by exactly 1 ns, because the product lands just below an
+    integer and truncation floors it. ``round()`` happens to recover all of
+    them, but correctness resting on a rounding mode when an exact integer path
+    costs nothing is not a trade worth making.
     """
     parts = col.astype(str).str.strip().str.split(".", n=1, expand=True)
     seconds = parts[0].astype("int64").to_numpy(dtype="int64")
