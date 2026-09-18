@@ -45,6 +45,11 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
 
+[tool.ruff.lint.isort]
+# Without this, ruff treats `shadowfill` as third-party and demands that the
+# package imports be merged into the numpy/pandas block.
+known-first-party = ["shadowfill"]
+
 [tool.mypy]
 python_version = "3.11"
 strict = true
