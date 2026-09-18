@@ -199,3 +199,30 @@ assumption to a shadow whose arithmetic the assumption could not have altered.
 unverifiable assumption genuinely moved this shadow's queue position. This is
 the reading that makes the Plan 4 robustness filter ("drop every shadow whose
 outcome depended on an unverifiable assumption") mean what it says.
+
+### L. Synthetic generator was super-linear and had to be re-indexed (Task 7)
+
+**Plan said:** pick a live order to cancel/execute with
+`live = [oid for oid, (_, _, s) in resting.items() if s == side]` followed by
+`rng.choice(live)`.
+
+**Found:** that rebuild is O(|resting|) per event, and the resting set grows
+without bound because adds (55%) outpace removals. Measured:
+5k events 0.64 s, 10k 1.6 s, 20k 6.8 s, 40k 43.3 s -- 4x the events for 68x the
+time. Generating the 200k committed fixture exceeded two minutes, and Task 12's
+benchmark asks for a 2,000,000-event stream, which was unreachable.
+
+**Changed:** per-side dense id lists plus an oid -> slot map, so removal is a
+swap with the last element and selection is `live[rng.integers(0, len(live))]`.
+40k events now takes 0.198 s (218x faster) and 2M takes 14.0 s. The choice is
+still uniform over live orders on that side, so the process is distributionally
+unchanged; the concrete stream for a given seed differs from the plan's version
+because the RNG is consumed differently, which is harmless -- no committed
+artifact predated this change and the tests require determinism per seed, not
+specific values.
+
+**Not changed, but flagged:** adds outpace removals, so the resting set and
+book depth grow monotonically through the stream. The generator is therefore
+non-stationary, and queue-ahead statistics drift over a long run. That is a
+property of the plan's process, not of this fix, and changing the
+probabilities is a research decision rather than an implementation one.
