@@ -1102,7 +1102,7 @@ def test_events_at_other_prices_and_sides_are_ignored():
 Run: `pytest tests/python/test_shadow_tracker.py -v`
 Expected: FAIL with `ImportError: cannot import name 'Placement' from 'shadowfill.replay'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Append to `python/shadowfill/replay.py`. **Put `from enum import IntEnum` at the top of the file with the existing imports**, for the same ruff reason as Task 5:
 
@@ -1282,12 +1282,12 @@ def run_reference(events: np.ndarray, placements: list[Placement]) -> list[Outco
     return [tracker.outcomes[p.shadow_id] for p in sorted(placements, key=lambda x: x.shadow_id)]
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/python/test_shadow_tracker.py -v`
 Expected: PASS, 10 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add python/shadowfill/replay.py tests/python/test_shadow_tracker.py
