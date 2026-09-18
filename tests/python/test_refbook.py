@@ -70,3 +70,29 @@ def test_arrival_seq_is_recorded_for_priority():
     add(b, 7, 2, 100, 10, Side.BID)
     assert b.find(1).seq == 0
     assert b.find(2).seq == 7
+
+
+def test_top_of_book_series_reports_state_after_each_event():
+    """Covers top_of_book_series without LOBSTER data present.
+
+    This does NOT replace test_refbook_vs_lobster_orderbook.py, which checks the
+    same function against an independently produced snapshot file.
+    """
+    import numpy as np
+
+    from shadowfill.events import EVENT_DTYPE
+    from shadowfill.replay import top_of_book_series
+
+    rows = [
+        (0, 0, 1, 100, 10, EventType.ADD, Side.BID),
+        (1, 1, 2, 105, 10, EventType.ADD, Side.ASK),
+        (2, 2, 3, 101, 10, EventType.ADD, Side.BID),
+        (3, 3, 3, 101, 10, EventType.DELETE, Side.BID),
+        (4, 4, 0, 105, 5, EventType.EXECUTE_HIDDEN, Side.ASK),
+    ]
+    events = np.array(rows, dtype=EVENT_DTYPE)
+    tob = top_of_book_series(events)
+
+    assert tob["best_bid"].tolist() == [100, 100, 101, 100, 100]
+    assert tob["best_ask"].tolist() == [0, 105, 105, 105, 105]
+    assert tob["seq"].tolist() == [0, 1, 2, 3, 4]

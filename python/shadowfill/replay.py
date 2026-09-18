@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
+
 from .events import EventType, Side
 
 
@@ -90,3 +92,30 @@ class RefBook:
 
     def best_ask(self) -> int | None:
         return min(self.asks) if self.asks else None
+
+
+TOB_DTYPE = np.dtype([("ts_ns", "<i8"), ("seq", "<u8"), ("best_bid", "<i8"), ("best_ask", "<i8")])
+
+
+def top_of_book_series(events: np.ndarray) -> np.ndarray:
+    """Replay ``events`` and return top-of-book *after* each event.
+
+    A best price of 0 means that side of the book was empty.
+    """
+    book = RefBook()
+    out = np.zeros(len(events), dtype=TOB_DTYPE)
+    for i, e in enumerate(events):
+        book.apply(
+            int(e["ts_ns"]),
+            int(e["seq"]),
+            int(e["order_id"]),
+            int(e["price"]),
+            int(e["size"]),
+            int(e["type"]),
+            int(e["side"]),
+        )
+        out[i]["ts_ns"] = e["ts_ns"]
+        out[i]["seq"] = e["seq"]
+        out[i]["best_bid"] = book.best_bid() or 0
+        out[i]["best_ask"] = book.best_ask() or 0
+    return out

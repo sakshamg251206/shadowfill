@@ -148,3 +148,23 @@ The run manifest records the resolved environment: Python version, installed
 versions of numpy / pandas / pyarrow, and the compiler id and version used for
 the C++ engine. A result that cannot be traced to an environment is not
 reproducible, and that claim is load-bearing in this repository.
+
+## Added 2026-09-19, during Tasks 5-12
+
+### I. Coverage for `top_of_book_series` without LOBSTER data (Task 5)
+
+**Plan said:** Task 5 validates `top_of_book_series` solely against LOBSTER's
+own orderbook snapshot file, and adds no other test for it. Its step 4 warns
+"do not proceed on skips alone".
+
+**Found:** the LOBSTER sample is not present in `data/lobster/`, so both
+`needs_lobster` tests skip and the function would ship with zero executed
+coverage.
+
+**Changed:** added `test_top_of_book_series_reports_state_after_each_event` to
+`tests/python/test_refbook.py`, a hand-built five-event stream checking best
+bid/ask after each event including a delete that uncovers a worse level and a
+hidden execution that changes nothing. This does **not** substitute for the
+snapshot comparison -- an independent external reference is a different and
+stronger check -- and the LOBSTER tests remain in place, unweakened, to be run
+once the sample is downloaded.
