@@ -256,3 +256,36 @@ still passed under it. Prefix invariance constrains *when* information may be
 used, not *which* book state is consulted within one event, so it is weaker
 than the plan's framing suggests. The unit tests are what protect that
 invariant.
+
+### N. Task 10's code block predates amendments C, D and F (Task 10)
+
+**Plan said:** Task 10 step 3 gives a complete `shadow.hpp` / `shadow.cpp` to
+write, and its prose says to "port `RefShadowTracker` verbatim, including the
+four-step event ordering".
+
+**Found:** the prose and the code block disagree. The block was written before
+amendments C, D and F and contradicts all three — it expires before activating,
+activates on `effective_ts <= now_ts`, takes `insert_ts`/`expiry_ts` from the
+current event rather than the placement, has no `NOT_ACTIVATED`, counts the
+assumption inside `is_ahead`, and has no `assumed_ahead_events` column. Written
+out verbatim and run, it failed 4 of the 8 Task 10 tests.
+
+**Changed:** followed the prose and the amendments, which this file says win on
+conflict. The C++ tracker now matches `RefShadowTracker` statement for
+statement. Task 11's field-by-field equivalence test over five seeds is what
+holds that claim up; this commit only makes it plausible.
+
+**Also:** two Task 10 test scenarios were unsatisfiable and are corrected under
+amendment J, mirroring the Python suite rather than relaxing an assertion.
+`hidden executions never consume the queue` asserted `EXPIRED` with a 10 s
+horizon over 2 s of data (now `horizon = 1 * kSec`). `still resting at end of
+stream is truncated` used a lone event at `ts=0` against a placement with
+`effective_ts = 0`, which never activates, so it was testing non-activation;
+split into the `NotActivated` case and a genuine `Truncated` case with a second
+event. Both corrected expectations were checked against `run_reference` first,
+which returns `TRUNCATED` and `NOT_ACTIVATED` respectively.
+
+**Worth noting:** the plan's code block would have passed its own suite only
+under the pre-amendment semantics. Had it been written out without running the
+tests, the C++ engine would have silently disagreed with the oracle on every
+timestamp tie, and Task 11 would have been the first thing to notice.

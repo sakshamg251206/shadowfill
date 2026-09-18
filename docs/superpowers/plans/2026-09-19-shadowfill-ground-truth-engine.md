@@ -1949,7 +1949,7 @@ git commit -m "feat(cpp): order-by-order book reconstruction"
 
 **Context for the engineer:** Port `RefShadowTracker` verbatim, including the four-step event ordering. `Status`, `Placement` and `Outcome` field names must match the Python versions exactly — Task 11 compares them field by field.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/cpp/test_shadow.cpp`:
 ```cpp
@@ -2062,12 +2062,12 @@ TEST_CASE("still resting at end of stream is truncated") {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `make test-cpp`
 Expected: FAIL at compile time with `fatal error: shadowfill/shadow.hpp: No such file or directory`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `src/shadowfill_core/include/shadowfill/shadow.hpp`:
 ```cpp
@@ -2289,12 +2289,12 @@ void ShadowTracker::finalize() {
 }  // namespace shadowfill
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `make test-cpp`
 Expected: PASS, 14 test cases passing
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/shadowfill_core/include/shadowfill/shadow.hpp src/shadowfill_core/shadow.cpp tests/cpp/test_shadow.cpp
