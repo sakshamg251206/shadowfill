@@ -1,0 +1,51 @@
+[build-system]
+requires = ["scikit-build-core>=0.9", "pybind11>=2.12"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "shadowfill"
+version = "0.1.0"
+description = "Counterfactual fill estimation from market-by-order data"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "pyarrow>=16.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "hypothesis>=6.100",
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "pre-commit>=3.7",
+]
+
+[tool.scikit-build]
+wheel.packages = ["python/shadowfill"]
+cmake.version = ">=3.24"
+build-dir = "build/{wheel_tag}"
+
+# The C++ engine does not exist until Task 9. Gating it on an explicit option
+# (rather than probing the filesystem) means a path typo is a hard CMake error
+# instead of a silently-skipped extension module.
+[tool.scikit-build.cmake.define]
+SHADOWFILL_BUILD_CORE = "OFF"
+
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]
+addopts = "-ra --strict-markers"
+markers = ["needs_lobster: requires the manually downloaded LOBSTER sample"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["python/shadowfill"]
