@@ -799,12 +799,12 @@ class RefBook:
         return min(self.asks) if self.asks else None
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/python/test_refbook.py -v`
 Expected: PASS, 8 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add python/shadowfill/replay.py tests/python/test_refbook.py
@@ -821,7 +821,7 @@ git commit -m "feat: reference order-by-order book reconstruction"
 
 **Context for the engineer:** LOBSTER ships an `orderbook` file whose row *i* is the book state immediately **after** message row *i*. Replaying the message file and comparing top-of-book row by row is a free external correctness check on the reconstruction. Rows where the true best price sits outside the recorded level band are excluded — LOBSTER pads those with sentinel prices (`9999999999` on the ask side, `-9999999999` on the bid side).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/python/conftest.py`:
 ```python
