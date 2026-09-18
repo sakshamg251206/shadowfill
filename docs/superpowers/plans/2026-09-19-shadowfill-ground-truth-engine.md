@@ -301,7 +301,7 @@ git commit -m "chore: scaffold shadowfill package, cmake build, and CI"
 - Create: `python/shadowfill/events.py`
 - Test: `tests/python/test_events.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/python/test_events.py`:
 ```python
@@ -346,12 +346,12 @@ def test_empty_events_allocates_correct_shape():
     assert ev.dtype == EVENT_DTYPE
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/python/test_events.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'shadowfill.events'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `python/shadowfill/events.py`:
 ```python
@@ -415,12 +415,12 @@ def empty_events(n: int) -> np.ndarray:
     return np.zeros(n, dtype=EVENT_DTYPE)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/python/test_events.py -v`
 Expected: PASS, 4 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add python/shadowfill/events.py tests/python/test_events.py
