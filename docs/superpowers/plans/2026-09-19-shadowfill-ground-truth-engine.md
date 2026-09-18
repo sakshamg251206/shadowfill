@@ -601,12 +601,12 @@ echo "Then run: pytest -m needs_lobster -v"
 ls -1 "$DEST" || true
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `chmod +x scripts/fetch_lobster_sample.sh && pytest tests/python/test_lobster.py -v`
 Expected: PASS, 6 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add python/shadowfill/lobster.py scripts/fetch_lobster_sample.sh tests/python/test_lobster.py
@@ -623,7 +623,7 @@ git commit -m "feat: LOBSTER message/orderbook adapter with exact nanosecond par
 
 **Context for the engineer:** This is the oracle. Optimise for obviousness, not speed — `best_bid()` doing a linear `max()` over a dict is fine here because the C++ engine is the fast path. The one non-obvious rule is that `EXECUTE_HIDDEN`, `CROSS` and `HALT` leave the visible book untouched.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/python/test_refbook.py`:
 ```python
@@ -701,12 +701,12 @@ def test_arrival_seq_is_recorded_for_priority():
     assert b.find(2).seq == 7
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/python/test_refbook.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'shadowfill.replay'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `python/shadowfill/replay.py`:
 ```python
