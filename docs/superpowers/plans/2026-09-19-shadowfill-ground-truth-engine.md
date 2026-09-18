@@ -1304,7 +1304,7 @@ git commit -m "feat: never-cancel shadow-order ground-truth tracker"
 
 **Context for the engineer:** CI cannot depend on third-party data, and Plan 4 needs a stream whose censoring mechanism is known by construction. This generator emits a LOBSTER-format message file from a seeded zero-intelligence process, so it round-trips through the same adapter as real data.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/python/test_synthetic.py`:
 ```python
@@ -1358,12 +1358,12 @@ def test_stream_contains_every_event_type_we_care_about():
         assert int(required) in present
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/python/test_synthetic.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'shadowfill.synthetic'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `python/shadowfill/synthetic.py`:
 ```python
