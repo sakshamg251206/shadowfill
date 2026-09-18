@@ -1471,7 +1471,7 @@ def write_synthetic_csv(events: np.ndarray, path: str | Path) -> None:
     Path(path).write_text("\n".join(lines) + "\n")
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/python/test_synthetic.py -v`
 Expected: PASS, 5 passed
@@ -1487,7 +1487,7 @@ write_synthetic_csv(generate_synthetic_messages(n_events=200_000, seed=20260919)
 "
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add python/shadowfill/synthetic.py tests/python/test_synthetic.py tests/fixtures/synthetic_mbo_v1.csv
@@ -1503,7 +1503,7 @@ git commit -m "feat: deterministic synthetic MBO fixture generator"
 
 **Context for the engineer:** These are the tests that catch the failure modes nobody notices. `test_prefix_invariance` is the anti-leakage test: an outcome determined at event *k* must not change when events after *k* are appended. If it does, some future information leaked into the accounting.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/python/test_invariants.py`:
 ```python
@@ -1646,12 +1646,12 @@ def test_hidden_executions_alone_never_fill_anything():
     assert sum(o.status == int(Status.FILLED) for o in baseline) > 0
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/python/test_invariants.py -v`
 Expected: FAIL — `test_hidden_executions_alone_never_fill_anything` and `test_prefix_invariance_no_future_information_leaks` are the ones most likely to expose real bugs. If all nine pass immediately, re-read Task 6 step 3 and confirm `_match` runs before `book.apply`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 No new source code: these tests exercise Tasks 4–7. If any fails, fix `python/shadowfill/replay.py` and re-run. The two most likely defects and their fixes:
 
@@ -1669,12 +1669,12 @@ self._harvest_filled()
 self.book.apply(ts_ns, seq, order_id, price, size, etype, side)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/python/test_invariants.py -v`
 Expected: PASS, 9 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/python/test_invariants.py
@@ -1691,7 +1691,7 @@ git commit -m "test: queue monotonicity, prefix invariance, and determinism inva
 
 **Context for the engineer:** This mirrors `RefBook` exactly, with one difference: price levels live in `std::map` so `best_bid()`/`best_ask()` are O(log n) instead of O(n). Bids use `std::greater` so `begin()` is the best bid on both sides.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/cpp/test_book.cpp`:
 ```cpp
@@ -1767,12 +1767,12 @@ TEST_CASE("arrival sequence is retained for priority comparisons") {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `make test-cpp`
 Expected: FAIL at compile time with `fatal error: shadowfill/book.hpp: No such file or directory`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `src/shadowfill_core/include/shadowfill/event.hpp`:
 ```cpp
@@ -1927,12 +1927,12 @@ std::optional<std::int64_t> OrderBook::best_ask() const {
 }  // namespace shadowfill
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `make test-cpp`
 Expected: PASS, `All tests passed (16 assertions in 6 test cases)` (assertion count may differ)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/shadowfill_core/include/shadowfill/event.hpp src/shadowfill_core/include/shadowfill/book.hpp src/shadowfill_core/book.cpp tests/cpp/test_book.cpp
