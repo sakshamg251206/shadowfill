@@ -168,3 +168,34 @@ hidden execution that changes nothing. This does **not** substitute for the
 snapshot comparison -- an independent external reference is a different and
 stronger check -- and the LOBSTER tests remain in place, unweakened, to be run
 once the sample is downloaded.
+
+### J. `test_still_resting_at_end_of_data_is_truncated` split in two (Task 6)
+
+**Plan said:** one test, asserting a placement at `ts=0` against a single event
+at `ts=0` comes out `TRUNCATED`.
+
+**Found:** under amendment D that placement is `NOT_ACTIVATED`, not
+`TRUNCATED` -- its effective timestamp never falls strictly before any event,
+so it never activates. The plan's test would have passed only by conflating the
+two states amendment D exists to separate.
+
+**Changed:** renamed to `test_still_resting_at_end_of_data_is_not_activated`
+asserting `NOT_ACTIVATED`, and added
+`test_activated_and_still_resting_at_end_of_data_is_truncated` with a second
+event, which activates the shadow and then ends the stream under it -- the
+genuine TRUNCATED case, which the plan never covered. Net: one more assertion
+than the plan, not one fewer. Mirrored in the C++ suite.
+
+### K. When `assumed_ahead_events` increments (Task 6)
+
+**Plan said (amendment F):** increment when "a cancel or delete at this
+shadow's price and side, unknown id, `ahead` decremented".
+
+**Found:** "`ahead` decremented" is ambiguous when `ahead` is already 0, where
+`max(0, 0 - size)` leaves it unchanged. Counting there would attribute an
+assumption to a shadow whose arithmetic the assumption could not have altered.
+
+**Changed:** increments only when `ahead > 0` at the time, i.e. when the
+unverifiable assumption genuinely moved this shadow's queue position. This is
+the reading that makes the Plan 4 robustness filter ("drop every shadow whose
+outcome depended on an unverifiable assumption") mean what it says.
