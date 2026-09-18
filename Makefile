@@ -7,7 +7,7 @@ test:
 	pytest -v
 
 test-cpp:
-	cmake -B build/cpp -DSHADOWFILL_BUILD_CORE=ON -DSHADOWFILL_BUILD_TESTS=ON
+	cmake -B build/cpp -DSHADOWFILL_BUILD_CORE=ON -DSHADOWFILL_BUILD_TESTS=ON -DSHADOWFILL_BUILD_BINDINGS=OFF
 	cmake --build build/cpp -j
 	ctest --test-dir build/cpp --output-on-failure
 

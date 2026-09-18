@@ -28,9 +28,12 @@ wheel.packages = ["python/shadowfill"]
 cmake.version = ">=3.24"
 build-dir = "build/{wheel_tag}"
 
-# The C++ engine does not exist until Task 9. Gating it on an explicit option
-# (rather than probing the filesystem) means a path typo is a hard CMake error
-# instead of a silently-skipped extension module.
+# Gating on an explicit option rather than probing the filesystem means a path
+# typo is a hard CMake error instead of a silently-skipped extension module.
+# Stays OFF until Task 11 adds src/shadowfill_bindings/module.cpp: the only
+# reason the wheel compiles the core is to carry that extension module, so
+# turning it on earlier fails the build for no gain. `make test-cpp` passes
+# -DSHADOWFILL_BUILD_CORE=ON on its own and does not depend on this value.
 [tool.scikit-build.cmake.define]
 SHADOWFILL_BUILD_CORE = "OFF"
 
