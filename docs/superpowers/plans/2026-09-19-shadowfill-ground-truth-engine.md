@@ -891,12 +891,12 @@ def test_unknown_order_rate_is_small(lobster_pair):
     assert book.unknown_order_events / len(events) < 0.05
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/python/test_refbook_vs_lobster_orderbook.py -v`
 Expected: FAIL with `ImportError: cannot import name 'top_of_book_series'` (or SKIP if no data — in that case set `SHADOWFILL_LOBSTER_DIR` first; the import error must be fixed regardless)
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Append to `python/shadowfill/replay.py`. **Put `import numpy as np` at the top of the file with the existing imports, not inline** — ruff's isort rule (`I`) fails the build on mid-file imports:
 
@@ -933,12 +933,12 @@ def top_of_book_series(events: np.ndarray) -> np.ndarray:
     return out
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `SHADOWFILL_LOBSTER_DIR=data/lobster pytest tests/python/test_refbook_vs_lobster_orderbook.py -v`
 Expected: PASS, 2 passed (or 2 skipped on a machine without the sample — then run it once locally with the sample before moving on; do not proceed on skips alone)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add python/shadowfill/replay.py tests/python/conftest.py tests/python/test_refbook_vs_lobster_orderbook.py
@@ -962,7 +962,7 @@ git commit -m "test: validate book reconstruction against LOBSTER orderbook snap
 
 Swapping 3 and 4 silently breaks the ahead/behind test for cancellations, because the order is gone by the time you look it up.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/python/test_shadow_tracker.py`:
 ```python
@@ -1097,7 +1097,7 @@ def test_events_at_other_prices_and_sides_are_ignored():
     assert out.ahead_at_end == 10
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/python/test_shadow_tracker.py -v`
 Expected: FAIL with `ImportError: cannot import name 'Placement' from 'shadowfill.replay'`
