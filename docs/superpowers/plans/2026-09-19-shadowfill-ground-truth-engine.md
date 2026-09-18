@@ -437,7 +437,7 @@ git commit -m "feat: canonical MBO event schema"
 
 **Context for the engineer:** LOBSTER message files are headerless CSV with six columns: `Time, Type, OrderID, Size, Price, Direction`. `Time` is seconds after midnight with a fractional part of up to nine digits. `Direction` is `1` for a buy (bid-side) limit order and `-1` for a sell (ask-side) limit order, and for execution events it refers to the side of the *resting* order — so a bid-side execution is a seller-initiated trade. Never parse `Time` as a float: `57600.123456789` does not survive `float64` round-tripping at nanosecond resolution.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/python/test_lobster.py`:
 ```python
@@ -501,12 +501,12 @@ def test_rejects_out_of_order_timestamps(tmp_path):
         load_lobster_messages(p)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/python/test_lobster.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'shadowfill.lobster'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `python/shadowfill/lobster.py`:
 ```python
