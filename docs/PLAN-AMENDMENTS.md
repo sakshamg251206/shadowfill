@@ -226,3 +226,33 @@ book depth grow monotonically through the stream. The generator is therefore
 non-stationary, and queue-ahead statistics drift over a long run. That is a
 property of the plan's process, not of this fix, and changing the
 probabilities is a research decision rather than an implementation one.
+
+### M. Invariant tests verified by mutation, not by passing (Task 8)
+
+**Plan said:** "Expected: FAIL -- test_hidden_executions_alone_never_fill_anything
+and test_prefix_invariance_no_future_information_leaks are the ones most likely
+to expose real bugs. If all nine pass immediately, re-read Task 6 step 3."
+
+**Found:** all nine passed on the first run, because Task 6 was implemented
+with the corrected ordering already in place (amendment C). Passing tests are
+not evidence that the tests work, so both defects the plan names were injected
+deliberately and the suite re-run:
+
+* `book.apply` moved before `_match`: 3 failures
+  (`test_cancellation_ahead_reduces_queue_but_behind_does_not`, and both
+  `assumed_ahead_events` tests).
+* `EXECUTE_HIDDEN` added to the queue-consuming set: 2 failures
+  (`test_hidden_execution_never_consumes_the_queue`,
+  `test_hidden_executions_alone_never_fill_anything`).
+
+Both mutations were reverted and the suite reverified at 23 passed.
+
+**Changed:** nothing in the source. Recorded because "all nine passed" on its
+own would not have met the plan's own bar for evidence.
+
+**Worth noting:** the ordering mutation was caught only by Task 6's unit tests
+-- every test in `test_invariants.py`, including `test_prefix_invariance`,
+still passed under it. Prefix invariance constrains *when* information may be
+used, not *which* book state is consulted within one event, so it is weaker
+than the plan's framing suggests. The unit tests are what protect that
+invariant.
