@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from shadowfill.bias import (
+    block_bootstrap_errors,
     compare_fill_curves,
     fill_curve_ground_truth,
     fill_curves_observational,
@@ -152,3 +154,62 @@ def test_comparison_runs_end_to_end_on_a_synthetic_stream():
         assert np.all((curve >= 0) & (curve <= 1))
         assert np.all(np.diff(curve) >= -1e-12), "a fill curve cannot decrease with horizon"
     np.testing.assert_allclose(result.naive_error, result.naive_km - result.ground_truth)
+
+
+def _synthetic_pair(seed, n_events=30_000, horizon=10 * SEC):
+    events = generate_synthetic_messages(n_events=n_events, seed=seed)
+    placements = place_top_of_book_grid(
+        events, grid_ns=20_000_000, size=5, horizon_ns=horizon, latency_ns=0
+    )
+    settled, _ = replay_reference(events, placements)
+    columns = {f: np.array([getattr(o, f) for o in settled], dtype="int64") for f in OUTCOME_FIELDS}
+    return events, columns, extract_lifetimes(events)
+
+
+def test_bootstrap_interval_contains_the_point_estimate():
+    events, columns, table = _synthetic_pair(17)
+    end_ts = int(events["ts_ns"][-1])
+    kwargs = dict(horizon_ns=10 * SEC, end_ts=end_ts, horizons=HORIZONS, at_touch_only=False)
+
+    point = compare_fill_curves(columns, table, **kwargs)
+    ci = block_bootstrap_errors(
+        columns, table, **kwargs, block_ns=end_ts // 20, n_replicates=60, seed=1
+    )
+    assert int(ci["n_blocks"]) >= 20
+    assert np.all(ci["naive_error_lo"] <= point.naive_error + 1e-9)
+    assert np.all(ci["naive_error_hi"] >= point.naive_error - 1e-9)
+
+
+def test_bootstrap_is_reproducible_from_its_seed():
+    """Invariant: a reported interval must be regenerable from the manifest."""
+    events, columns, table = _synthetic_pair(19)
+    kwargs = dict(
+        horizon_ns=10 * SEC,
+        end_ts=int(events["ts_ns"][-1]),
+        horizons=HORIZONS,
+        at_touch_only=False,
+        block_ns=int(events["ts_ns"][-1]) // 20,
+        n_replicates=40,
+    )
+    first = block_bootstrap_errors(columns, table, **kwargs, seed=7)
+    second = block_bootstrap_errors(columns, table, **kwargs, seed=7)
+    third = block_bootstrap_errors(columns, table, **kwargs, seed=8)
+    np.testing.assert_array_equal(first["naive_error_lo"], second["naive_error_lo"])
+    assert not np.array_equal(first["naive_error_lo"], third["naive_error_lo"])
+
+
+def test_too_few_blocks_is_refused_rather_than_silently_narrow():
+    """One block resampled with replacement is the same block every time.
+
+    It would return a zero-width interval that looks like enormous precision.
+    """
+    events, columns, table = _synthetic_pair(23)
+    with pytest.raises(ValueError, match="too few"):
+        block_bootstrap_errors(
+            columns,
+            table,
+            horizon_ns=10 * SEC,
+            end_ts=int(events["ts_ns"][-1]),
+            horizons=HORIZONS,
+            block_ns=10**18,
+        )

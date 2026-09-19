@@ -122,6 +122,33 @@ def _run_cpp(events: np.ndarray, placements: list[Placement]) -> dict[str, Any]:
     )
 
 
+def compute_outcomes(
+    events: np.ndarray, placements: list[Placement], engine: str
+) -> tuple[dict[str, np.ndarray], dict[str, int]]:
+    """Run one engine and return (outcome columns, diagnostics).
+
+    Shared with the experiment runner so a headline number and a reproduction
+    run cannot diverge in how they invoked the engine.
+    """
+    if engine == "cpp":
+        result = _run_cpp(events, placements)
+        columns = {f: np.asarray(result[f], dtype="int64") for f in OUTCOME_FIELDS}
+        return columns, {
+            "unknown_order_assumed_ahead": int(result["unknown_order_assumed_ahead"]),
+            "fifo_violations": int(result["fifo_violations"]),
+            "unknown_order_events": int(result["unknown_order_events"]),
+        }
+    if engine == "python":
+        outcomes, raw = replay_reference(events, placements)
+        columns = {
+            f: np.array([getattr(o, f) for o in outcomes], dtype="int64") for f in OUTCOME_FIELDS
+        }
+        # Reported for both engines, not just the fast one: the definition of
+        # done asks for fifo_violations to be reported, never silently dropped.
+        return columns, {k: int(v) for k, v in raw.items()}
+    raise ValueError(f"unknown engine: {engine!r}")
+
+
 def _to_table(columns: dict[str, np.ndarray]) -> pa.Table:
     """Build the outcome table, nulling rows for placements that never existed.
 
@@ -163,24 +190,7 @@ def run_ground_truth(
         latency_ns=latency_ns,
     )
 
-    if engine == "cpp":
-        result = _run_cpp(events, placements)
-        columns = {f: np.asarray(result[f], dtype="int64") for f in OUTCOME_FIELDS}
-        diagnostics = {
-            "unknown_order_assumed_ahead": int(result["unknown_order_assumed_ahead"]),
-            "fifo_violations": int(result["fifo_violations"]),
-            "unknown_order_events": int(result["unknown_order_events"]),
-        }
-    elif engine == "python":
-        outcomes, raw = replay_reference(events, placements)
-        columns = {
-            f: np.array([getattr(o, f) for o in outcomes], dtype="int64") for f in OUTCOME_FIELDS
-        }
-        # Reported for both engines, not just the fast one: the definition of
-        # done asks for fifo_violations to be reported, never silently dropped.
-        diagnostics = {k: int(v) for k, v in raw.items()}
-    else:
-        raise ValueError(f"unknown engine: {engine!r}")
+    columns, diagnostics = compute_outcomes(events, placements, engine)
 
     pq.write_table(_to_table(columns), out_dir / "outcomes.parquet")
 
