@@ -289,3 +289,64 @@ which returns `TRUNCATED` and `NOT_ACTIVATED` respectively.
 under the pre-amendment semantics. Had it been written out without running the
 tests, the C++ engine would have silently disagreed with the oracle on every
 timestamp tie, and Task 11 would have been the first thing to notice.
+
+### O. The synthetic generator did not respect price-time priority (Task 7)
+
+**Plan said:** executions pick a live order with
+`live[rng.integers(0, len(live))]`, i.e. uniformly over every resting order on
+that side, at any depth.
+
+**Found:** that is not a matching engine. Measured on seed 5 over 40k events,
+0.3% of `EXECUTE` events landed at the best price and 3.2% hit the oldest order
+at their own level. ShadowFill's entire claim is queue arithmetic under
+price-time priority, so a fixture that ignores it makes every queue statistic
+derived from it unsafe to reason about — and the definition of done asks for
+`fifo_violations == 0` on synthetic data, which was unreachable.
+
+**Changed:** `EXECUTE` and `EXECUTE_HIDDEN` now cross to the best price and
+consume the oldest order resting there (100% at best price on every seed
+checked). Adds and cancels are deliberately left zero-intelligence and uniform
+over live orders at any depth: Plan 4 needs a cancellation mechanism
+independent of fill outcome by construction, so cancels must not consult the
+queue front. Implemented with a per-(side, price) arrival queue plus a heap of
+occupied prices, cancelled ids purged lazily from the front, so the generator
+stays linear — 200k events in 0.95 s. The committed fixture is regenerated;
+per amendment L the tests require determinism per seed, not specific values, so
+no expectation moved.
+
+**Not changed, but flagged:** amendment L's observation still stands. Adds
+outpace removals, so the book deepens monotonically through a long run and the
+generator remains non-stationary.
+
+### P. `fifo_violations` measured the normal path, not a defect (Tasks 6, 10, 12)
+
+**Plan said:** on `EXECUTE`, `if ahead == 0 and not is_ahead(order_id,
+insert_seq): fifo_violations += 1`, and the definition of done requires the
+count to be 0 on synthetic data.
+
+**Found:** the counter cannot be 0 on a correct stream. Once a shadow's `ahead`
+reaches 0, every order still resting at that price arrived after it *by
+construction*, so the next execution there necessarily trips the condition —
+and that same execution's residual is what fills the shadow. Making executions
+FIFO-faithful (amendment O) raised the count from 5 to 99 on seed 5, and of the
+75 distinct shadows involved, 74 ended `FILLED` and the remaining one `EXPIRED`
+after a partial fill. The counter was measuring "a shadow reached the front of
+its queue and was filled there": the desired path, under a name that claims a
+data defect.
+
+**Changed:** redefined as a property of the event stream alone, with no shadow
+in it. On an `EXECUTE` of a known order id, count it if an order that arrived
+earlier is still resting at the same price and side. This is 0 on a FIFO stream
+by construction, and on real LOBSTER data a nonzero count means hidden
+liquidity, an order type this reconstruction does not model, or a genuine gap
+in it — which is what is worth pinning in a manifest. The counter moved to
+`RefBook` / `OrderBook`, where the state it needs already lives, and the
+trackers delegate to it. Six direct tests per engine pin the definition.
+
+The old shadow-relative quantity is not replaced by a renamed counter: it is
+already derivable from the outcome columns as
+`status == FILLED and ahead_at_end == 0`.
+
+**Consequence for the definition of done:** "`fifo_violations` is 0 on
+synthetic data and reported on real data" is now a meaningful gate rather than
+an unreachable one, and is kept as written.

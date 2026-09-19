@@ -2311,7 +2311,7 @@ git commit -m "feat(cpp): never-cancel shadow-order tracker"
 
 **Context for the engineer:** The binding takes seven parallel 1-D NumPy arrays rather than a structured array, which avoids depending on NumPy struct padding matching the C++ layout. The whole replay happens inside one call — never call across the language boundary per event.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/python/test_cpp_equivalence.py`:
 ```python
@@ -2376,12 +2376,12 @@ def test_cpp_produces_some_fills_so_the_comparison_is_meaningful():
     assert (actual["status"] == int(Status.FILLED)).sum() > 0
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pip install -e ".[dev]" && pytest tests/python/test_cpp_equivalence.py -v`
 Expected: FAIL/SKIP with `Could not import 'shadowfill._core'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `src/shadowfill_bindings/module.cpp`:
 ```cpp
@@ -2505,12 +2505,12 @@ Also add `tests/python/__init__.py` (empty file) so `from .test_invariants impor
 touch tests/python/__init__.py
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pip install -e ".[dev]" --force-reinstall --no-deps && pytest tests/python/test_cpp_equivalence.py -v`
 Expected: PASS, 7 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/shadowfill_bindings/module.cpp tests/python/test_cpp_equivalence.py tests/python/__init__.py
