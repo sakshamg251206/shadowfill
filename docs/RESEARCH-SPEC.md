@@ -108,11 +108,16 @@ exactly that.**
 | Source | Role | Notes |
 |---|---|---|
 | LOBSTER free sample (NASDAQ) | equities regime, adapter validation | message file carries order IDs; orderbook file gives an independent snapshot to validate reconstruction against |
-| Self-recorded Coinbase L3 | scale + out-of-venue generalisation | one of the few venues exposing per-order IDs and full lifecycle events |
-| Databento MBO (free credit) | second equity regime | optional |
+| ~~Self-recorded Coinbase L3~~ | ~~scale + out-of-venue generalisation~~ | **Unavailable — see amendment U.** `level3` exists only on Coinbase Exchange, which is gated behind a business application. Advanced Trade, which an individual can reach, publishes no L3 at all. |
+| Databento MBO (free credit) | **primary second source** | per-order IDs with an explicit Add/Cancel/Modify/Trade/Fill action, so fill-versus-cancel is observed rather than inferred |
 | Synthetic generator (in repo) | CI, and the placebo test | censoring independent by construction |
 
-Three regimes with different tick sizes, which is exactly what H2 needs.
+H2 needs contrasting tick regimes. With the crypto venue gone, these come from
+*relative* tick size within a venue — a high-priced stock at a $0.01 tick is a
+small-relative-tick, thin-queue book; a low-priced one at the same tick is
+large-relative-tick and deep — rather than from three separate venues. Holding
+the matching rules constant while varying the tick regime is a cleaner
+comparison than varying venue and tick together, which confounds them.
 No third-party data is committed to the repository.
 
 ## 6. Evaluation
@@ -153,7 +158,9 @@ Each of these can kill a claim, which is the point.
 
 1. **Plan 1 — ground-truth engine.** MBO reconstruction, exact queue arithmetic,
    never-cancel outcomes, C++/Python equivalence. *Plan written.*
-2. **Plan 2 — multi-venue data layer.** Coinbase L3 recorder with gap detection,
-   Databento adapter, Parquet partitioning, dataset manifests.
+2. **Plan 2 — data layer.** Databento MBO adapter, Parquet partitioning, dataset
+   manifests. *Revised 2026-09-19: the Coinbase L3 recorder was built, then
+   parked on `plan-2a-recorder` when the venue proved unobtainable. See
+   amendment U.*
 3. **Plan 3 — estimators and the L2 ablation.**
 4. **Plan 4 — experiments, failure tests, and the paper-style README.**

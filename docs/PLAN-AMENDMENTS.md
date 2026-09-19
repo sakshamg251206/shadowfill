@@ -439,3 +439,75 @@ tests exist and skip; they do not pass, and they must not be reported as
 passing. Until they are run, this repository has demonstrated that its two
 engines agree with each other and with hand-worked cases, not that its
 reconstruction matches a real exchange's own book.
+
+### U. Plan 2's venue changed: Coinbase L3 is not obtainable (Plan 2)
+
+**Research spec said:** self-recorded Coinbase L3 provides "scale + out-of-venue
+generalisation", because Coinbase is one of the few venues exposing per-order
+IDs and full lifecycle events.
+
+**Found, 2026-09-19, in this order:**
+
+1. The `level3` channel requires authentication (amendment in the Plan 2a
+   spec). Not true of the historical public Coinbase Pro `full` feed.
+2. A Coinbase Developer Platform key cannot satisfy it — different scheme
+   (Ed25519 JWT, no passphrase) — and, more decisively, cannot reach L3 data at
+   any endpoint: the Advanced Trade WebSocket publishes `level2` and has no
+   `level3` channel. L2 carries no order IDs.
+3. Coinbase **Exchange**, which does publish `level3`, is gated behind a
+   business application. It is not available to an individual account.
+
+So the venue named in the research spec is not obtainable, and no amount of
+implementation fixes that.
+
+**Crypto alternatives were considered and rejected on a research ground, not a
+convenience one.** Bitstamp's public `live_orders` channel carries per-order
+IDs, but an `order_deleted` event does not say whether the order was *filled*
+or *cancelled*; recovering that means joining the separate trades feed, and
+there is a documented reliability issue with exactly this
+(<https://github.com/phil8192/ob-analytics/issues/28>). That distinction is not
+incidental here — it is the mechanism. A trade ahead of the shadow can fill it;
+a cancel ahead of it cannot. Inferring which one happened would make the
+"computed, not modelled" ground truth partly modelled, which is the one claim
+this project cannot afford to weaken.
+
+**Changed:** Plan 2 moves to **Databento MBO**, already named in the research
+spec §5 as a second equity regime. Its MBO schema carries `order_id`, a venue
+`sequence`, and an explicit `action` of Add / Cancel / Modify / Trade / Fill /
+Reset, so fill-versus-cancel is observed rather than inferred.
+
+**To verify before relying on it, against real data and not documentation:**
+Databento distinguishes `T` (trade, aggressor side) from `F` (fill, the resting
+order that was consumed). ShadowFill needs `F`, because that is what names
+*which* queued order was hit. Not every venue publishes it. Nasdaq's ITCH
+"Order Executed" message carries the resting order's reference number, so the
+expectation is that it does, but the first task of the Databento work is to
+confirm it on a real sample. If executions do not identify the resting order,
+Databento is no better than Bitstamp and the plan changes again.
+
+**Consequence for H2.** Three regimes were to come from three venues. They now
+come from relative tick size *within* a venue: a $500 stock at a $0.01 tick is
+a small-relative-tick, thin-queue book; a $5 stock at the same tick is
+large-relative-tick and deep. Holding the venue and matching rules constant
+while varying the tick regime is arguably a cleaner comparison than varying
+venue and tick together, which confounds the two. CME futures MBO is available
+through the same source if a genuinely different mechanism is wanted.
+
+**Consequence for Plan 2a.** The Coinbase recorder is complete, tested and
+unusable: it has no venue. It is parked, not deleted, on the branch
+`plan-2a-recorder` (10 tasks, all offline tests passing on a clean clone; the
+live smoke test never ran and is not claimed to). Its venue-agnostic parts —
+the tape, the gap ledger, the session manifest, the sequence tracker, the
+provenance helpers — would carry over to any future live recorder. Nothing from
+it is merged to `main`, because merging code that cannot run would misrepresent
+what this repository does.
+
+**Consequence for urgency.** The recorder was built first because tape
+accumulates in wall-clock time and cannot be backfilled. Historical MBO removes
+that pressure entirely: the data already exists. The ordering argument that
+justified Plan 2a no longer applies.
+
+**New constraint.** MBO is voluminous and Databento bills by data volume
+against a finite free credit. The symbol and date budget has to be decided
+before downloading rather than discovered afterwards, which makes it a design
+question for the next plan rather than an implementation detail.
