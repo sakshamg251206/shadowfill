@@ -158,10 +158,27 @@ Each of these can kill a claim, which is the point.
 ## 9. Plan sequence
 
 1. **Plan 1 — ground-truth engine.** MBO reconstruction, exact queue arithmetic,
-   never-cancel outcomes, C++/Python equivalence. *Plan written.*
-2. **Plan 2 — data layer.** Databento MBO adapter, Parquet partitioning, dataset
-   manifests. *Revised 2026-09-19: the Coinbase L3 recorder was built, then
-   parked on `plan-2a-recorder` when the venue proved unobtainable. See
-   amendment U.*
-3. **Plan 3 — estimators and the L2 ablation.**
-4. **Plan 4 — experiments, failure tests, and the paper-style README.**
+   never-cancel outcomes, C++/Python equivalence. *Built. Two definition-of-done
+   items are externally blocked; see amendments T and V.1.*
+2. **Plan 2 — data layer.** *Built on Nasdaq TotalView-ITCH, not Databento: see
+   amendment V. Single-pass multi-symbol adapter, Hive-partitioned Parquet,
+   per-day manifests. The Coinbase L3 recorder is parked on `plan-2a-recorder`;
+   see amendment U.*
+3. **Plan 3 — estimators and the L2 ablation.** *Partly built. Kaplan–Meier,
+   Aalen–Johansen, the matched comparison and the block bootstrap exist and
+   have produced H1 and H4 on one session. Cox, Fine–Gray, IPCW policy
+   re-targeting, dependent-censoring bounds and the ML baseline do not.*
+4. **Plan 4 — experiments, failure tests, and the paper-style README.** *The
+   placebo is built, runs on every commit, and has already rejected one
+   comparison design; see amendment X. The other four failure tests are not
+   built.*
+
+### Status of the hypotheses
+
+| | state |
+|---|---|
+| H1 — the bias exists and is material | measured on one session; all intervals exclude zero |
+| H2 — the sign is regime-dependent | the one session's sign is opposite to the spec's leading story (amendment X.1); untested across regimes |
+| H3 — adverse selection offsets it | not built. Needs markouts, and it carries the headline number in basis points |
+| H4 — the L2 penalty | measured on one session, for the cancel-from-front heuristic only |
+| H5 — decision relevance | not built |
