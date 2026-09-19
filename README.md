@@ -57,6 +57,42 @@ only. Reproduce it with:
 Every number above is in `results/h1-aapl-2019-12-30/manifest.json` with the
 git commit, input hash and full config that produced it.
 
+## What a level-2 feed costs (H4)
+
+Every open-source queue-aware backtester runs on level-2 data, which reports
+size per price level and no order identities. When size leaves a level, an L2
+simulator cannot know whether it sat ahead of your order or behind it, so it
+guesses. The guess has never been validated, because validating it needs
+exactly the L3 ground truth computed here.
+
+Same session, same hypothetical orders, one field removed — the order id on
+every cancel, which is precisely what aggregation destroys:
+
+| horizon | L3 truth | L2 cancel-from-front | error | 95% CI |
+|---|---|---|---|---|
+| 100 ms | 0.0190 | 0.0230 | +0.0040 | [+0.0031, +0.0050] |
+| 1 s | 0.0606 | 0.0798 | +0.0192 | [+0.0151, +0.0237] |
+| 10 s | 0.2268 | 0.2611 | +0.0343 | [+0.0273, +0.0416] |
+| 60 s | 0.4203 | 0.4449 | +0.0246 | [+0.0188, +0.0306] |
+
+At one second the L2 simulator promises **32% more fills than it gets**. That
+is the same order of magnitude as the cancellation bias above — which is what
+H4 predicted, and it is measured rather than argued.
+
+The two errors point in opposite directions, so an L2 backtest that also treats
+cancellation as censoring gets a partial cancellation of its own. That is luck,
+not correctness, and nothing guarantees it holds in another regime.
+
+**Scope.** Only cancel-from-front is implemented, because it is what the
+engine's unknown-order path already does. It is the most *optimistic* of the
+four standard heuristics, so this is a one-sided bound: a simulator that
+assumes the best is wrong by at least this much. A test pins the direction —
+the L2 curve can never sit below the truth.
+
+    python -m shadowfill.l2 \
+        --message-path data/parquet/date=2019-12-30/symbol=AAPL/events.parquet \
+        --out-dir results/h4-l2-aapl-2019-12-30 --block-ns 300000000000
+
 ## The test that nearly killed this
 
 On the synthetic stream, cancellation is uniform over live orders and therefore

@@ -137,10 +137,11 @@ def fill_curve_ground_truth(
     because an order that never existed must not sit in the denominator.
     """
     durations, traded, _, _ = ground_truth_arrays(columns, horizon_ns=horizon_ns, end_ts=end_ts)
-    return _cdf(durations, traded, horizons)
+    return fill_cdf(durations, traded, horizons)
 
 
-def _cdf(durations: np.ndarray, events: np.ndarray, horizons: np.ndarray) -> np.ndarray:
+def fill_cdf(durations: np.ndarray, events: np.ndarray, horizons: np.ndarray) -> np.ndarray:
+    """1 - S(h): the fill probability by each horizon, from a product-limit fit."""
     times, surv = kaplan_meier(durations, events)
     return 1.0 - step_at(times, surv, horizons, initial=1.0)
 
@@ -188,7 +189,7 @@ def fill_curves_observational(
 def _observational_from_arrays(
     durations: np.ndarray, cause: np.ndarray, horizons: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
-    naive = _cdf(durations, (cause == _FILL).astype(float), horizons)
+    naive = fill_cdf(durations, (cause == _FILL).astype(float), horizons)
     aj_times, incidence = aalen_johansen(durations, cause, cause=_FILL)
     return naive, step_at(aj_times, incidence, horizons, initial=0.0)
 
@@ -296,7 +297,7 @@ def block_bootstrap_errors(
         obs_idx = np.concatenate([obs_members[b] for b in drawn])
         if len(gt_idx) == 0 or len(obs_idx) == 0:
             continue
-        truth = _cdf(gt_dur[gt_idx], gt_ev[gt_idx], horizons)
+        truth = fill_cdf(gt_dur[gt_idx], gt_ev[gt_idx], horizons)
         naive, correct = _observational_from_arrays(obs_dur[obs_idx], obs_cause[obs_idx], horizons)
         naive_errors.append(naive - truth)
         cr_errors.append(correct - truth)
@@ -369,7 +370,7 @@ def compare_by_ahead(
         n_gt, n_obs = int(gt_mask.sum()), int(obs_mask.sum())
         if n_gt < min_observations or n_obs < min_observations:
             continue
-        truth = _cdf(gt_dur[gt_mask], gt_ev[gt_mask], horizons)
+        truth = fill_cdf(gt_dur[gt_mask], gt_ev[gt_mask], horizons)
         naive, correct = _observational_from_arrays(
             obs_dur[obs_mask], obs_cause[obs_mask], horizons
         )

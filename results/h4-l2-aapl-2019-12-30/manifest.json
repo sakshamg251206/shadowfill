@@ -1,0 +1,87 @@
+{
+  "git_sha": "d961971f6f818fc1f80f24118189d4290a461e45",
+  "experiment": "H4-l2-ablation",
+  "heuristic": "cancel-from-front (the most optimistic of the four)",
+  "input_path": "data/parquet/date=2019-12-30/symbol=AAPL/events.parquet",
+  "input_format": "parquet",
+  "input_sha256": "17ef74f2d57a858106505749db65474ba6c789e6ad4ff055ec989d31c514bcef",
+  "n_events": 346841,
+  "n_placements": 180934,
+  "environment": {
+    "python": "3.11.13",
+    "platform": "macOS-26.6.2-arm64-arm-64bit",
+    "numpy": "2.4.6",
+    "pandas": "3.0.6",
+    "pyarrow": "25.0.1",
+    "compiler": "clang 21.0.0 (clang-2100.1.1.101)"
+  },
+  "diagnostics": {
+    "l3": {
+      "unknown_order_assumed_ahead": 432,
+      "fifo_violations": 412,
+      "unknown_order_events": 230
+    },
+    "l2": {
+      "unknown_order_assumed_ahead": 349735,
+      "fifo_violations": 10787,
+      "unknown_order_events": 153196
+    }
+  },
+  "config": {
+    "horizon_ns": 60000000000,
+    "latency_ns": 0,
+    "horizons_ns": [
+      100000000,
+      1000000000,
+      10000000000,
+      60000000000
+    ],
+    "window_ns": [
+      34200000000000,
+      57600000000000
+    ],
+    "block_ns": 300000000000,
+    "n_replicates": 200,
+    "n_blocks": 8,
+    "seed": 0,
+    "engine": "cpp"
+  },
+  "rows": [
+    {
+      "horizon_ns": 100000000,
+      "l3_truth": 0.019023754686390393,
+      "l2_cancel_from_front": 0.022981064628553982,
+      "l2_error": 0.003957309942163589,
+      "l2_error_lo": 0.003107232036862906,
+      "l2_error_hi": 0.004982719441686723,
+      "n_shadows": 180934
+    },
+    {
+      "horizon_ns": 1000000000,
+      "l3_truth": 0.06064367085111422,
+      "l2_cancel_from_front": 0.0798415156389739,
+      "l2_error": 0.019197844787859686,
+      "l2_error_lo": 0.015103729521269335,
+      "l2_error_hi": 0.02370173204218296,
+      "n_shadows": 180934
+    },
+    {
+      "horizon_ns": 10000000000,
+      "l3_truth": 0.22682771034443572,
+      "l2_cancel_from_front": 0.2610895266258534,
+      "l2_error": 0.03426181628141767,
+      "l2_error_lo": 0.02730946115774254,
+      "l2_error_hi": 0.04162517368967242,
+      "n_shadows": 180934
+    },
+    {
+      "horizon_ns": 60000000000,
+      "l3_truth": 0.4202581466051939,
+      "l2_cancel_from_front": 0.44487378468839944,
+      "l2_error": 0.02461563808320555,
+      "l2_error_lo": 0.018830543122534182,
+      "l2_error_hi": 0.030604411679437404,
+      "n_shadows": 180934
+    }
+  ]
+}
