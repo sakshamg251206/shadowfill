@@ -9,6 +9,16 @@ hypothetical passive orders, it computes — by exact queue arithmetic, not by a
 model — whether each order would have filled, when, and how much queue sat ahead
 of it throughout its life.
 
+On top of it, the pipeline that turns that into a measurement: a
+TotalView-ITCH adapter, Parquet materialisation, extraction of the real orders
+that rested in the same book, and a comparison of the never-cancel truth
+against the estimators a passive backtest relies on, with block-bootstrap
+intervals.
+
+**No result is claimed yet.** The measurement has been run only on the
+synthetic fixture, which is a model and not a market. Numbers appear here when
+they come from a real session, traceable to a manifest.
+
 ## Quick start
 
     make install
@@ -18,6 +28,14 @@ of it throughout its life.
     python -m shadowfill.ground_truth \
         --message-path tests/fixtures/synthetic_mbo_v1.csv \
         --out-dir results/synthetic
+
+The full measurement, on the same fixture:
+
+    python -m shadowfill.experiment \
+        --message-path tests/fixtures/synthetic_mbo_v1.csv \
+        --out-dir results/h1-synthetic \
+        --grid-ns 50000000 --size 5 --horizon-ns 10000000000 \
+        --engine python --block-ns 2000000000
 
 ## Using real data
 
@@ -38,6 +56,17 @@ have a sample:
     SHADOWFILL_LOBSTER_DIR=data/lobster pytest -m needs_lobster -v
 
 Neither vendor's files are redistributed here, and CI touches neither.
+
+A day is parsed once and materialised, so nothing downstream re-reads 3.5 GB
+of gzip:
+
+    python -m shadowfill.dataset \
+        --itch-path data/itch/12302019.NASDAQ_ITCH50.gz \
+        --symbols AAPL,MSFT --out-root data/parquet
+
+    python -m shadowfill.experiment \
+        --message-path data/parquet/date=2019-12-30/symbol=AAPL/events.parquet \
+        --out-dir results/h1-aapl
 
 ## What the output means
 
@@ -123,6 +152,18 @@ resting — measured, but necessary rather than sufficient. Level aggregation
 below the best price is not checked against an outside observer at all. The
 free LOBSTER sample is no longer published, so this is a limitation of what is
 obtainable, not a choice; `docs/PLAN-AMENDMENTS.md` §V.1 records it in full.
+
+**The observational population is matched, not identical.** Shadow orders are
+placed at the touch on a fixed clock; real orders arrive at all depths when
+their senders choose. The comparison restricts real orders to the touch and
+stratifies on queue-ahead, which is the dominant determinant of a fill and is
+measured identically on both sides. Size and arrival timing remain
+uncontrolled, and the unconditional row is reported beside the strata so the
+size of the composition effect is visible rather than assumed away.
+
+**Uncertainty is currently within-session only.** The bootstrap resamples
+contiguous blocks of time within one session. Day-to-day variation needs more
+than one session and is not covered by the intervals reported.
 
 **Nothing here is a trading strategy.** This is a measurement instrument. It
 reports whether a hypothetical passive order would have filled and when. It

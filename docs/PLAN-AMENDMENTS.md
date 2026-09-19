@@ -640,3 +640,63 @@ rather than left for a reader to find.
 message type byte by byte from the published layouts, so the offsets themselves
 are pinned by tests that need no sample, no network and no vendor — which is
 what invariant 6 requires of CI.
+
+### W. Plans 2 and 3 built past Plan 1's blocked definition of done
+
+**Why this needed saying.** CLAUDE.md's scope discipline says not to build into
+Plans 2-4 until Plan 1's definition of done is met and reviewed. Two of its six
+items — `pytest -m needs_lobster`, and top-of-book agreement with LOBSTER's own
+snapshots — are externally blocked and, per amendment V.1, cannot be recovered
+from ITCH at all. Waiting for them would stall the project permanently. The
+gate was waived explicitly by the author; this records that it was waived
+rather than forgotten, and the two items stay unchecked in the plan.
+
+**What was built.**
+
+| module | role |
+|---|---|
+| `itch.py` | ITCH 5.0 -> canonical events, many symbols in one pass |
+| `dataset.py` | a day materialised as Hive-partitioned Parquet + manifest |
+| `provenance.py` | the manifest fields both runners must pin identically |
+| `lifetimes.py` | real-order lifetimes: the observational population |
+| `estimators.py` | Kaplan-Meier and Aalen-Johansen, in numpy |
+| `bias.py` | the three curves side by side, strata, block bootstrap |
+| `experiment.py` | one command, one table, one manifest |
+
+**Decisions worth recording, because they are the ones a reader should argue
+with.**
+
+*Estimators written out rather than imported.* `lifelines` would do this, but
+the comparison between the two estimators is the result, and a reader checking
+the headline number should be able to check the twenty lines that produced it.
+Both are pinned against hand-computed examples, including the off-by-one that
+silently deflates every incidence — Aalen-Johansen needs S(t_(i-1)), survival
+just *before* each event time.
+
+*The event of interest is the first fill, on both sides.* A shadow that traded
+part of its size did fill. Requiring the full size on one side and not the
+other would make the two curves answer different questions and the gap
+meaningless.
+
+*The observational population is restricted to the touch and stratified on
+queue-ahead.* Shadows are placed at the prevailing best price on a fixed clock;
+real orders arrive at all depths when their senders choose. Comparing them
+unconditionally blends that composition difference into the bias. On the
+synthetic fixture the unconditional gap at 1 s is +0.43 and the within-stratum
+gaps are +0.26 — so roughly half the unconditional number was composition, not
+bias. `ahead_at_insert` and `ahead_at_arrival` are the same quantity by
+construction, which is the only thing that makes the strata comparable; a test
+pins them together.
+
+*The bootstrap resamples time blocks, within one session.* Orders in a session
+queue behind each other and one trade settles many at once, so an order-level
+bootstrap would report an interval several times too narrow. Shadows and real
+orders are drawn with the same blocks, because the estimate is a difference
+over one period. It is within-session: day-to-day variation needs more than one
+day and the manifest says so rather than implying a stronger interval.
+
+**Still open.** No result is claimed. The measurement has run only on the
+synthetic fixture, which is a model and not a market: adds outpace cancels so
+the book deepens monotonically, and its cancellation is independent by
+construction, which is the placebo condition rather than a market. H2-H5, the
+L2 ablation and the failure tests are not built.
