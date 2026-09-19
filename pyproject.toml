@@ -30,12 +30,10 @@ build-dir = "build/{wheel_tag}"
 
 # Gating on an explicit option rather than probing the filesystem means a path
 # typo is a hard CMake error instead of a silently-skipped extension module.
-# Stays OFF until Task 11 adds src/shadowfill_bindings/module.cpp: the only
-# reason the wheel compiles the core is to carry that extension module, so
-# turning it on earlier fails the build for no gain. `make test-cpp` passes
-# -DSHADOWFILL_BUILD_CORE=ON on its own and does not depend on this value.
+# ON from Task 11, which is where src/shadowfill_bindings/module.cpp arrives
+# and the wheel finally has an extension module worth compiling the core for.
 [tool.scikit-build.cmake.define]
-SHADOWFILL_BUILD_CORE = "OFF"
+SHADOWFILL_BUILD_CORE = "ON"
 
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]

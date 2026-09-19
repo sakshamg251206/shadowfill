@@ -1,9 +1,17 @@
+import importlib
 import os
 from pathlib import Path
 
 import pytest
 
 LOBSTER_DIR = Path(os.environ.get("SHADOWFILL_LOBSTER_DIR", "data/lobster"))
+
+# test_cpp_equivalence.py guards itself with importorskip, which is right for a
+# local pure-Python checkout but wrong for CI: a wheel built without the
+# extension module would skip the only test that validates the C++ engine and
+# go green over it. Where the engine is meant to exist, its absence is an error.
+if os.environ.get("SHADOWFILL_REQUIRE_CORE") == "1":
+    importlib.import_module("shadowfill._core")
 
 
 @pytest.fixture(scope="session")
