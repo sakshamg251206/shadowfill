@@ -3,21 +3,19 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import platform
-import subprocess
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from .dataset import load_events
 from .lobster import load_lobster_messages
 from .placements import place_top_of_book_grid
+from .provenance import environment, git_sha, sha256_file
 from .replay import Placement, Status, replay_reference
 
 OUTCOME_FIELDS = (
@@ -87,40 +85,20 @@ def load_config(path: str | Path) -> dict[str, Any]:
     return config
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+def load_messages(path: str | Path) -> tuple[np.ndarray, str]:
+    """Load canonical events from either input format, dispatching on suffix.
 
-
-def _git_sha() -> str:
-    try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
-        ).strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return "unknown"
-
-
-def _environment() -> dict[str, str]:
-    """Amendment H: pin what produced these numbers, not just what they are."""
-    env = {
-        "python": platform.python_version(),
-        "platform": platform.platform(),
-        "numpy": np.__version__,
-        "pandas": pd.__version__,
-        "pyarrow": pa.__version__,
-        "compiler": "n/a (python engine)",
-    }
-    try:
-        from shadowfill import _core
-
-        env["compiler"] = str(_core.compiler)
-    except ImportError:
-        pass
-    return env
+    ``.parquet`` is a materialised dataset (see ``dataset.py``); ``.csv`` is a
+    LOBSTER message file. An unrecognised suffix raises rather than guessing,
+    because guessing wrong produces a run that still writes a manifest saying
+    it was right. The format used is recorded in that manifest.
+    """
+    path = Path(path)
+    if path.suffix == ".parquet":
+        return load_events(path), "parquet"
+    if path.suffix == ".csv":
+        return load_lobster_messages(path), "lobster-csv"
+    raise ValueError(f"unknown input format for {path.name!r}: expected .parquet or .csv")
 
 
 def _run_cpp(events: np.ndarray, placements: list[Placement]) -> dict[str, Any]:
@@ -176,7 +154,7 @@ def run_ground_truth(
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    events = load_lobster_messages(message_path)
+    events, input_format = load_messages(message_path)
     placements = place_top_of_book_grid(
         events,
         grid_ns=grid_ns,
@@ -207,13 +185,14 @@ def run_ground_truth(
     pq.write_table(_to_table(columns), out_dir / "outcomes.parquet")
 
     manifest = {
-        "git_sha": _git_sha(),
+        "git_sha": git_sha(),
         "input_path": str(message_path),
-        "input_sha256": _sha256(message_path),
+        "input_format": input_format,
+        "input_sha256": sha256_file(message_path),
         "n_events": len(events),
         "n_placements": len(placements),
         "engine": engine,
-        "environment": _environment(),
+        "environment": environment(),
         "diagnostics": diagnostics,
         "config": {
             "grid_ns": grid_ns,

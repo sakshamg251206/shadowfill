@@ -22,6 +22,7 @@ from shadowfill.itch import (
     ItchTruncatedError,
     load_itch_messages,
     parse_itch,
+    parse_itch_symbols,
 )
 
 # --------------------------------------------------------------------------
@@ -438,3 +439,54 @@ def test_gzip_member_ending_without_its_trailer_is_a_truncation(tmp_path):
     path.write_bytes(path.read_bytes()[:-12])
     with pytest.raises(ItchTruncatedError):
         parse_itch(path, "TEST")
+
+
+# --------------------------------------------------------------------------
+# Many symbols, one pass
+# --------------------------------------------------------------------------
+
+
+def test_many_symbols_come_out_of_a_single_pass(tmp_path):
+    """A full day is 3.5 GB of gzip, so re-reading it per symbol is not an option.
+
+    Each symbol must come out exactly as a single-symbol parse would, which is
+    what stops the multi-symbol path from becoming a second, divergent parser.
+    """
+    bodies = [
+        add(100, b"B", 500, 1_000_000, locate=1),
+        add(200, b"S", 900, 5_000_000, locate=2),
+        execute(100, 200, locate=1),
+        execute(200, 400, locate=2),
+    ]
+    path = write_itch(tmp_path, bodies)
+
+    both = parse_itch_symbols(path, ["TEST", "OTHER"])
+    assert set(both) == {"TEST", "OTHER"}
+    for symbol in ("TEST", "OTHER"):
+        alone, alone_diag = parse_itch(path, symbol)
+        together, together_diag = both[symbol]
+        assert together.tolist() == alone.tolist()
+        assert together_diag.locate == alone_diag.locate
+        assert together_diag.unresolved_refs == alone_diag.unresolved_refs
+
+
+def test_each_symbol_keeps_its_own_sequence_numbering(tmp_path):
+    """seq defines price-time priority *within* a book, so it must not be global."""
+    both = parse_itch_symbols(
+        write_itch(
+            tmp_path,
+            [
+                add(100, b"B", 500, 1_000_000, locate=1),
+                add(200, b"S", 900, 5_000_000, locate=2),
+                add(101, b"B", 300, 999_900, locate=1),
+            ],
+        ),
+        ["TEST", "OTHER"],
+    )
+    assert both["TEST"][0]["seq"].tolist() == [0, 1]
+    assert both["OTHER"][0]["seq"].tolist() == [0]
+
+
+def test_a_symbol_that_never_appears_is_named_in_the_error(tmp_path):
+    with pytest.raises(ItchFormatError, match="NOSUCH"):
+        parse_itch_symbols(write_itch(tmp_path, [add(100, b"B", 5, 1_000_000)]), ["TEST", "NOSUCH"])

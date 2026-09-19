@@ -48,6 +48,10 @@ EVENT_DTYPE = np.dtype(
     ]
 )
 
+#: Field names in schema order. ``EVENT_DTYPE.names`` is optional in numpy's
+#: type stubs, and every caller here knows it is populated.
+FIELD_NAMES: tuple[str, ...] = tuple(EVENT_DTYPE.names or ())
+
 #: Event types that remove size from the *visible* queue. EXECUTE_HIDDEN is
 #: excluded deliberately: a hidden order never sat in the visible book, so it
 #: must not decrement a shadow order's queue-ahead counter.

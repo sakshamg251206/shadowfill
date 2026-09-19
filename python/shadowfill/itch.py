@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import gzip
 from collections import Counter
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import BinaryIO
@@ -138,28 +138,32 @@ def _iter_messages(stream: BinaryIO) -> Iterator[bytes]:
         yield body
 
 
-def parse_itch(
-    path: str | Path, symbol: str, *, allow_truncated: bool = False
-) -> tuple[np.ndarray, ItchDiagnostics]:
-    """Parse one symbol out of an ITCH 5.0 file into canonical events.
+def _build(rows: list[tuple[int, int, int, int, int, int, int]]) -> np.ndarray:
+    events = empty_events(len(rows))
+    for i, row in enumerate(rows):
+        events[i] = row
+    assert events.dtype == EVENT_DTYPE
+    return events
 
-    Returns the event array and the diagnostics that belong in the run manifest.
 
-    ``allow_truncated`` stops cleanly at a partial final message instead of
-    raising, and records it in the diagnostics. Use it for byte-range prefixes,
-    never for a file that is supposed to be complete.
+class _SymbolState:
+    """Per-symbol parse state. One of these exists per requested symbol.
+
+    Each symbol gets its own ``seq`` counter because ``seq`` defines price-time
+    priority *within a book*; numbering it across the whole file would make one
+    symbol's arrivals shift another's priority.
     """
-    target = symbol.strip().upper().encode()
-    diag = ItchDiagnostics()
-    live: dict[int, _Live] = {}
-    rows: list[tuple[int, int, int, int, int, int, int]] = []
-    locate: int | None = None
 
-    def emit(ts_ns: int, order_id: int, price: int, size: int, etype: int, side: int) -> None:
-        rows.append((ts_ns, len(rows), order_id, price, size, etype, side))
+    def __init__(self, diag: ItchDiagnostics) -> None:
+        self.diag = diag
+        self.live: dict[int, _Live] = {}
+        self.rows: list[tuple[int, int, int, int, int, int, int]] = []
+
+    def emit(self, ts_ns: int, order_id: int, price: int, size: int, etype: int, side: int) -> None:
+        self.rows.append((ts_ns, len(self.rows), order_id, price, size, etype, side))
 
     def remove(
-        ref: int, ts_ns: int, qty: int | None, etype: int, *, promote_on_empty: bool = False
+        self, ref: int, ts_ns: int, qty: int | None, etype: int, *, promote_on_empty: bool = False
     ) -> None:
         """Apply a cancel/execute/delete to a reference, or count it unresolved.
 
@@ -173,124 +177,165 @@ def parse_itch(
         a fill from the shadow tracker, which is the one signal it exists to
         detect.
         """
-        order = live.get(ref)
+        order = self.live.get(ref)
         if order is None:
-            diag.unresolved_refs += 1
+            self.diag.unresolved_refs += 1
             return
         wanted = order.shares if qty is None else qty
         if wanted > order.shares:
-            diag.oversized_removals += 1
+            self.diag.oversized_removals += 1
             wanted = order.shares
         order.shares -= wanted
         if order.shares <= 0:
-            del live[ref]
+            del self.live[ref]
             if promote_on_empty:
                 etype = int(EventType.DELETE)
-        emit(ts_ns, ref, order.price, wanted, etype, order.side)
+        self.emit(ts_ns, ref, order.price, wanted, etype, order.side)
+
+
+def parse_itch_symbols(
+    path: str | Path, symbols: Sequence[str], *, allow_truncated: bool = False
+) -> dict[str, tuple[np.ndarray, ItchDiagnostics]]:
+    """Parse several symbols out of an ITCH 5.0 file in one pass.
+
+    A full trading day is ~3.5 GB of gzip that cannot be seeked into, so the
+    file is read once and dispatched by stock locate. Each symbol comes out
+    exactly as a single-symbol parse would.
+
+    ``allow_truncated`` stops cleanly at a partial final message instead of
+    raising, and records it in every symbol's diagnostics. Use it for
+    byte-range prefixes, never for a file that is supposed to be complete.
+    """
+    wanted = {s.strip().upper().encode(): s.strip().upper() for s in symbols}
+    if not wanted:
+        raise ValueError("no symbols requested")
+    states: dict[int, _SymbolState] = {}
+    found: dict[str, _SymbolState] = {}
+    # File-level, not per-symbol: a symbol's state is created when its stock
+    # directory message appears, which is long after the first message.
+    total = 0
+    skipped: Counter[str] = Counter()
 
     with _open(path) as stream:
         try:
-            for body in _iter_messages(stream):
-                diag.messages += 1
-                code = body[:1]
+            for raw in _iter_messages(stream):
+                total += 1
+                code = raw[:1]
 
                 expected = MESSAGE_LENGTHS.get(code)
                 if expected is None:
-                    diag.skipped_types[code.decode("latin-1")] += 1
+                    skipped[code.decode("latin-1")] += 1
                     continue
-                if len(body) != expected:
+                if len(raw) != expected:
                     raise ItchFormatError(
-                        f"message {code!r} has length {len(body)}, spec says {expected}; "
+                        f"message {code!r} has length {len(raw)}, spec says {expected}; "
                         "frame alignment lost"
                     )
 
                 if code == b"R":
-                    if locate is None and body[11:19].strip() == target:
-                        locate = _u(body, 1, 2)
-                        diag.locate = locate
+                    name = raw[11:19].strip()
+                    if name in wanted and wanted[name] not in found:
+                        locate = _u(raw, 1, 2)
+                        diag = ItchDiagnostics(locate=locate)
+                        state = _SymbolState(diag)
+                        states[locate] = state
+                        found[wanted[name]] = state
                     continue
 
-                if locate is None or _u(body, 1, 2) != locate:
+                state_opt = states.get(_u(raw, 1, 2))
+                if state_opt is None:
                     continue
-                diag.symbol_messages += 1
-                ts_ns = _u(body, 5, 6)
-
-                if code in (b"A", b"F"):
-                    ref = _u(body, 11, 8)
-                    side_byte = body[19:20]
-                    if side_byte not in (b"B", b"S"):
-                        raise ItchFormatError(f"bad buy/sell indicator {side_byte!r} in {code!r}")
-                    side = int(Side.BID) if side_byte == b"B" else int(Side.ASK)
-                    shares = _u(body, 20, 4)
-                    price = _u(body, 32, 4)
-                    live[ref] = _Live(side=side, price=price, shares=shares)
-                    emit(ts_ns, ref, price, shares, int(EventType.ADD), side)
-
-                elif code in (b"E", b"C"):
-                    # C carries its own execution price and a printable flag. Both
-                    # are ignored on purpose: the queue is consumed at the resting
-                    # order's price, and a non-printable execution is merely absent
-                    # from the tape -- the shares still left the book.
-                    remove(_u(body, 11, 8), ts_ns, _u(body, 19, 4), int(EventType.EXECUTE))
-
-                elif code == b"X":
-                    remove(
-                        _u(body, 11, 8),
-                        ts_ns,
-                        _u(body, 19, 4),
-                        int(EventType.CANCEL_PARTIAL),
-                        promote_on_empty=True,
-                    )
-
-                elif code == b"D":
-                    remove(_u(body, 11, 8), ts_ns, None, int(EventType.DELETE))
-
-                elif code == b"U":
-                    # Replace retires one reference and issues another. It is 11% of
-                    # order flow in the measured sample, and the exchange treats it
-                    # as a fresh arrival, so it must become DELETE + ADD: modelling
-                    # it as an amendment would wrongly preserve queue priority.
-                    orig, new = _u(body, 11, 8), _u(body, 19, 8)
-                    order = live.get(orig)
-                    if order is None:
-                        diag.unresolved_refs += 1
-                        continue
-                    side = order.side
-                    remove(orig, ts_ns, None, int(EventType.DELETE))
-                    shares, price = _u(body, 27, 4), _u(body, 31, 4)
-                    live[new] = _Live(side=side, price=price, shares=shares)
-                    emit(ts_ns, new, price, shares, int(EventType.ADD), side)
-
-                elif code == b"P":
-                    # A trade against non-displayed liquidity. Invariant 1: it never
-                    # sat in the visible queue, so it must not consume it.
-                    side_byte = body[19:20]
-                    side = int(Side.BID) if side_byte == b"B" else int(Side.ASK)
-                    emit(
-                    ts_ns, 0, _u(body, 32, 4), _u(body, 20, 4),
-                    int(EventType.EXECUTE_HIDDEN), side,
-                )  # fmt: skip
-
-                elif code == b"Q":
-                    # Auction cross. Side is 0: a cross has no resting side.
-                    emit(ts_ns, 0, _u(body, 27, 4), _u(body, 11, 8), int(EventType.CROSS), 0)
-
-                else:
-                    diag.skipped_types[code.decode("latin-1")] += 1
-
+                _decode(raw, code, state_opt)
         except ItchTruncatedError:
             if not allow_truncated:
                 raise
-            diag.truncated = True
+            for state in states.values():
+                state.diag.truncated = True
 
-    if locate is None:
-        raise ItchFormatError(f"symbol {symbol!r} never appeared in the stock directory")
+    for state in found.values():
+        state.diag.messages = total
+        state.diag.skipped_types.update(skipped)
 
-    events = empty_events(len(rows))
-    for i, row in enumerate(rows):
-        events[i] = row
-    assert events.dtype == EVENT_DTYPE
-    return events, diag
+    missing = [s.strip().upper() for s in symbols if s.strip().upper() not in found]
+    if missing:
+        raise ItchFormatError(f"symbols never appeared in the stock directory: {missing}")
+    return {name: (_build(state.rows), state.diag) for name, state in found.items()}
+
+
+def _decode(raw: bytes, code: bytes, state: _SymbolState) -> None:
+    """Turn one message for a tracked symbol into canonical events."""
+    state.diag.symbol_messages += 1
+    ts_ns = _u(raw, 5, 6)
+
+    if code in (b"A", b"F"):
+        ref = _u(raw, 11, 8)
+        side_byte = raw[19:20]
+        if side_byte not in (b"B", b"S"):
+            raise ItchFormatError(f"bad buy/sell indicator {side_byte!r} in {code!r}")
+        side = int(Side.BID) if side_byte == b"B" else int(Side.ASK)
+        shares = _u(raw, 20, 4)
+        price = _u(raw, 32, 4)
+        state.live[ref] = _Live(side=side, price=price, shares=shares)
+        state.emit(ts_ns, ref, price, shares, int(EventType.ADD), side)
+
+    elif code in (b"E", b"C"):
+        # C carries its own execution price and a printable flag. Both are
+        # ignored on purpose: the queue is consumed at the resting order's
+        # price, and a non-printable execution is merely absent from the tape
+        # -- the shares still left the book.
+        state.remove(_u(raw, 11, 8), ts_ns, _u(raw, 19, 4), int(EventType.EXECUTE))
+
+    elif code == b"X":
+        state.remove(
+            _u(raw, 11, 8), ts_ns, _u(raw, 19, 4), int(EventType.CANCEL_PARTIAL),
+            promote_on_empty=True,
+        )  # fmt: skip
+
+    elif code == b"D":
+        state.remove(_u(raw, 11, 8), ts_ns, None, int(EventType.DELETE))
+
+    elif code == b"U":
+        # Replace retires one reference and issues another. It is 11% of order
+        # flow in the measured sample, and the exchange treats it as a fresh
+        # arrival, so it must become DELETE + ADD: modelling it as an amendment
+        # would wrongly preserve queue priority.
+        orig, new = _u(raw, 11, 8), _u(raw, 19, 8)
+        order = state.live.get(orig)
+        if order is None:
+            state.diag.unresolved_refs += 1
+            return
+        side = order.side
+        state.remove(orig, ts_ns, None, int(EventType.DELETE))
+        shares, price = _u(raw, 27, 4), _u(raw, 31, 4)
+        state.live[new] = _Live(side=side, price=price, shares=shares)
+        state.emit(ts_ns, new, price, shares, int(EventType.ADD), side)
+
+    elif code == b"P":
+        # A trade against non-displayed liquidity. Invariant 1: it never sat in
+        # the visible queue, so it must not consume it.
+        side = int(Side.BID) if raw[19:20] == b"B" else int(Side.ASK)
+        state.emit(
+            ts_ns, 0, _u(raw, 32, 4), _u(raw, 20, 4), int(EventType.EXECUTE_HIDDEN), side
+        )  # fmt: skip
+
+    elif code == b"Q":
+        # Auction cross. Side is 0: a cross has no resting side.
+        state.emit(ts_ns, 0, _u(raw, 27, 4), _u(raw, 11, 8), int(EventType.CROSS), 0)
+
+    else:
+        state.diag.skipped_types[code.decode("latin-1")] += 1
+
+
+def parse_itch(
+    path: str | Path, symbol: str, *, allow_truncated: bool = False
+) -> tuple[np.ndarray, ItchDiagnostics]:
+    """Parse one symbol out of an ITCH 5.0 file into canonical events.
+
+    Returns the event array and the diagnostics that belong in the run manifest.
+    """
+    return parse_itch_symbols(path, [symbol], allow_truncated=allow_truncated)[
+        symbol.strip().upper()
+    ]
 
 
 def load_itch_messages(
