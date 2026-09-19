@@ -350,3 +350,92 @@ already derivable from the outcome columns as
 **Consequence for the definition of done:** "`fifo_violations` is 0 on
 synthetic data and reported on real data" is now a meaningful gate rather than
 an unreachable one, and is kept as written.
+
+### Q. The tracker was O(live shadows) per event and missed the gate (Tasks 10, 12)
+
+**Plan said:** `match` loops over every active shadow and skips the ones whose
+side or price do not match; `expire` partitions the whole active list each
+event; `harvest_filled` partitions it again. Task 12's benchmark then asks for
+≥ 2,000,000 events/s at a 10 ms grid with a 10 s horizon.
+
+**Found:** those two are incompatible. That configuration keeps ~2000 shadows
+live at once, and throughput is set by that number, not by the stream. Measured
+on 2,000,000 synthetic events, varying only the placement schedule:
+
+| live shadows | events/s |
+|---|---|
+| 2000 | 212,564 |
+| 200 | 1,784,669 |
+| 20 | 3,975,927 |
+
+The plan's benchmark sits in the top row, at 215k events/s — an order of
+magnitude under its own gate. This is not only a benchmark artefact:
+`configs/ground_truth_synthetic.yaml` runs at roughly 1200 live shadows.
+
+**Changed:** shadows are bucketed by `(side, price)`, since an event can only
+touch shadows at its own price and side; expiry is a min-heap keyed on expiry
+timestamp; and `harvest_filled` is gone, because a filled outcome is final and
+can be settled where it happens. Actives moved to a deque with a `settled`
+flag, as the buckets and heap hold indices into it, so memory is O(total
+placements) rather than O(live) — ~45 MB at 400k placements, flagged in the
+header with the free list that would fix it.
+
+Same stream and placements: **2,437,567 events/s, 11.5x**, past the gate. The
+accounting is untouched and the five-seed equivalence against the oracle still
+passes, which is the claim that matters. The Python oracle keeps its linear
+scans: it optimises for being obviously correct.
+
+### R. Task 12 additions beyond its code block (Task 12)
+
+**Plan said:** `run_ground_truth` leaves `diagnostics` empty for the Python
+engine, `OUTCOME_FIELDS` omits `assumed_ahead_events`, the manifest records no
+environment, the Parquet writer writes raw `-1`, and `main()` takes no
+`--config` although the `reproduce` make target already passed one.
+
+**Found:** each of those contradicts something already agreed — amendment E
+(nulls not sentinels), F (the per-shadow assumption column), H (environment
+provenance) — or the definition of done, which asks for `fifo_violations` to be
+reported and not silently dropped. "Reported only when you happen to use the
+fast engine" is not that.
+
+**Changed:** all four honoured. `replay_reference` returns outcomes and
+diagnostics together, with `run_reference` now a thin wrapper over it. The
+config reader is a strict parser for a flat map of seven scalars rather than a
+YAML dependency: an unknown key, a missing colon or a value that will not
+coerce raises, so the reader's narrowness costs a clear error rather than a
+wrong run that still writes a confident manifest. `_core.pyi` was added so the
+fourteen parallel arrays at the binding call site are type-checked rather than
+ignored, with the `ignore_missing_imports` override scoped to pyarrow alone per
+amendment G. The `cpp` and `bench` CI jobs, overdue from amendment A, landed
+here along with `SHADOWFILL_REQUIRE_CORE` on the python job per amendment B.
+
+**Also:** two of the plan's Task 12 tests could skip themselves. The
+NOT_ACTIVATED test hoped a stream would produce such a row; it now forces them
+with latency and asserts they exist. A test that can pass by not running is not
+a test.
+
+### S. Known issue: `make lint` breaks on Python newer than 3.11
+
+**Found:** while verifying the definition of done on a clean clone, a
+virtualenv built with the machine's default `python3` (3.14) resolved numpy
+2.5.3, whose stubs use `type` statements. mypy is pinned to
+`python_version = "3.11"`, so it rejects 3.12+ syntax in those stubs and lint
+fails before checking any of this project's code. On Python 3.11 — what CI
+uses, and what `requires-python` was written for — lint is clean.
+
+**Not changed.** `requires-python = ">=3.11"` currently advertises support this
+repository does not test, so a contributor on 3.12+ hits a confusing failure in
+numpy's stubs rather than in their own work. The honest fixes are to cap
+`requires-python` to what CI actually exercises, or to add newer interpreters
+to the CI matrix and let `python_version` follow. Choosing between those is a
+project decision, so it is recorded here rather than made silently.
+
+### T. Definition of done: two items remain unverified (Plan 1)
+
+Items 2 and 3 — `pytest -m needs_lobster`, and top-of-book reconstruction
+matching LOBSTER's own snapshots on >95% of in-band rows — require the LOBSTER
+sample, which is not present on this machine and is not redistributed here. The
+tests exist and skip; they do not pass, and they must not be reported as
+passing. Until they are run, this repository has demonstrated that its two
+engines agree with each other and with hand-worked cases, not that its
+reconstruction matches a real exchange's own book.

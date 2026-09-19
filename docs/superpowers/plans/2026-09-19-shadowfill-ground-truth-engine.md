@@ -2528,7 +2528,7 @@ git commit -m "feat: pybind11 bindings with Python/C++ equivalence tests"
 
 **Context for the engineer:** The run manifest is what makes results reproducible: it pins the git SHA, the SHA-256 of the input data, and the full config. Any figure in the paper must be traceable to one manifest.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/python/test_ground_truth.py`:
 ```python
@@ -2611,12 +2611,12 @@ def test_python_and_cpp_engines_write_identical_outcomes(tmp_path):
     assert py_table.equals(cpp_table)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/python/test_ground_truth.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'shadowfill.placements'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `python/shadowfill/placements.py`:
 ```python
@@ -2947,12 +2947,12 @@ window are assumed to be ahead of the shadow, and the count is reported in
 every manifest.
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/python -v && make bench`
 Expected: full suite PASS; benchmark prints a rate and `OK`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add python/shadowfill/placements.py python/shadowfill/ground_truth.py benchmarks/bench_replay.py configs/ground_truth_synthetic.yaml README.md tests/python/test_ground_truth.py tests/python/test_invariants.py
@@ -2963,12 +2963,28 @@ git commit -m "feat: placement grid, reproducible ground-truth output, benchmark
 
 ## Definition of done for Plan 1
 
-- [ ] `make test`, `make test-cpp`, `make lint`, `make bench` all pass on a clean clone with no external data
+- [x] `make test`, `make test-cpp`, `make lint`, `make bench` all pass on a clean clone with no external data
 - [ ] `pytest -m needs_lobster` passes on a machine with the LOBSTER sample present
 - [ ] Top-of-book reconstruction matches LOBSTER's own snapshot file on >95% of in-band rows
-- [ ] C++ and Python outcomes are identical on five independent synthetic seeds
-- [ ] `results/synthetic/manifest.json` exists and pins git SHA + input hash
-- [ ] `fifo_violations` is 0 on synthetic data and reported (not silently dropped) on real data
+- [x] C++ and Python outcomes are identical on five independent synthetic seeds
+- [x] `results/synthetic/manifest.json` exists and pins git SHA + input hash
+- [x] `fifo_violations` is 0 on synthetic data and reported (not silently dropped) on real data
+
+**Verification, 2026-09-19.** Item 1 was checked by cloning the repository into
+an empty directory, building a fresh Python 3.11 virtualenv and running each
+target: `make install`, `make lint` clean, `make test` 71 passed / 2 skipped
+(both `needs_lobster`), `make test-cpp` 39 assertions in 22 cases, `make bench`
+3,009,485 events/s against the 2,000,000 gate, and `make reproduce` writing
+`results/synthetic/manifest.json` with `fifo_violations` 0.
+
+**Items 2 and 3 are unverified.** They require the LOBSTER sample, which is
+third-party data this repository does not redistribute and which is not present
+on this machine. The tests exist, are marked `needs_lobster`, and skip rather
+than pass. Nothing else in Plan 1 depends on them, but no claim should be made
+about real-data reconstruction accuracy until they have been run:
+
+    ./scripts/fetch_lobster_sample.sh data/lobster
+    SHADOWFILL_LOBSTER_DIR=data/lobster pytest -m needs_lobster -v
 
 ---
 
