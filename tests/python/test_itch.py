@@ -490,3 +490,27 @@ def test_each_symbol_keeps_its_own_sequence_numbering(tmp_path):
 def test_a_symbol_that_never_appears_is_named_in_the_error(tmp_path):
     with pytest.raises(ItchFormatError, match="NOSUCH"):
         parse_itch_symbols(write_itch(tmp_path, [add(100, b"B", 5, 1_000_000)]), ["TEST", "NOSUCH"])
+
+
+def test_a_cross_that_printed_nothing_is_not_an_event(tmp_path):
+    """Nasdaq prints a zero-share opening cross for symbols with no auction interest.
+
+    Observed once for UN on 2019-12-30 at 09:30:00.72, with zero shares and a
+    zero price. Carrying it through would put a trade that never happened into
+    every aggregate.
+    """
+    ev, diag = parse_itch(
+        write_itch(tmp_path, [add(100, b"B", 500, 1_000_000), cross(0, 0)]), "TEST"
+    )
+    assert len(ev) == 1
+    assert diag.zero_size_messages == 1
+
+
+def test_a_zero_share_execution_is_dropped_and_counted(tmp_path):
+    """Belt and braces: no path may emit a size-0 event, whatever the message."""
+    ev, diag = parse_itch(
+        write_itch(tmp_path, [add(100, b"B", 500, 1_000_000), execute(100, 0), trade(0, 999_900)]),
+        "TEST",
+    )
+    assert [int(r["type"]) for r in ev] == [int(EventType.ADD)]
+    assert diag.zero_size_messages == 2

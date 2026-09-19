@@ -1,5 +1,6 @@
 import importlib
 import os
+import time
 from pathlib import Path
 
 import pytest
@@ -31,9 +32,17 @@ def lobster_pair():
 @pytest.fixture(scope="session")
 def itch_sample():
     """Path to a Nasdaq ITCH sample, or skip."""
+    override = os.environ.get("SHADOWFILL_ITCH_SAMPLE")
+    if override:
+        return Path(override)
+
     samples = list(ITCH_DIR.glob("*.gz")) + list(ITCH_DIR.glob("*.itch"))
-    if not samples:
-        pytest.skip(f"no ITCH sample in {ITCH_DIR}; run scripts/fetch_itch_sample.sh")
+    # A file still being written would make this suite non-deterministic: it
+    # grows between runs, so a failure could not be reproduced. Settled means
+    # untouched for a minute.
+    settled = [p for p in samples if time.time() - p.stat().st_mtime > 60]
+    if not settled:
+        pytest.skip(f"no settled ITCH sample in {ITCH_DIR}; run scripts/fetch_itch_sample.sh")
     # Largest by bytes, not by name: a 2 MB and a 20 MB prefix of the same day
     # sort the wrong way round, and the short one covers too little to validate.
-    return max(samples, key=lambda p: p.stat().st_size)
+    return max(settled, key=lambda p: p.stat().st_size)

@@ -82,6 +82,9 @@ class ItchDiagnostics:
     skipped_types: Counter[str] = field(default_factory=Counter)
     #: The stream ended mid-message and ``allow_truncated`` let it pass.
     truncated: bool = False
+    #: Messages that priced or printed nothing, e.g. an opening cross for a
+    #: symbol with no auction interest. Real data, but not an event.
+    zero_size_messages: int = 0
 
 
 @dataclass
@@ -160,6 +163,19 @@ class _SymbolState:
         self.rows: list[tuple[int, int, int, int, int, int, int]] = []
 
     def emit(self, ts_ns: int, order_id: int, price: int, size: int, etype: int, side: int) -> None:
+        """Append one canonical event, dropping the ones that say nothing.
+
+        Nasdaq prints a ``Q`` cross with zero shares at 09:30 for a symbol with
+        no auction interest -- observed once for UN on 2019-12-30. It is valid
+        data and it is not an event: it has no size and no price, it moves no
+        queue, and carried through it would appear in every count and every
+        aggregate as a trade that never happened. Dropped here rather than at
+        each call site so no future message type can reintroduce it, and
+        counted so the drop is visible in the manifest.
+        """
+        if size <= 0:
+            self.diag.zero_size_messages += 1
+            return
         self.rows.append((ts_ns, len(self.rows), order_id, price, size, etype, side))
 
     def remove(
