@@ -29,7 +29,7 @@ OUT="${DEST}/12302019.prefix${MB}mb.gz"
 mkdir -p "$DEST"
 BYTES=$(( MB * 1024 * 1024 - 1 ))
 echo "Fetching first ${MB} MB of ${FILE} ..."
-curl -fsSL -r "0-${BYTES}" -o "$OUT" "$URL"
+curl -fsSL --http1.1 --retry 10 --retry-all-errors -r "0-${BYTES}" -o "$OUT" "$URL"
 
 ls -lh "$OUT"
 echo
