@@ -17,7 +17,7 @@ jobs:
       # with importorskip, which is right for a pure-Python checkout and wrong
       # here: a wheel built without the engine would skip the only test that
       # validates it and the job would go green over an unvalidated engine.
-      - run: pytest -v -m "not needs_lobster"
+      - run: pytest -v -m "not needs_lobster and not needs_itch"
         env:
           SHADOWFILL_REQUIRE_CORE: "1"
 

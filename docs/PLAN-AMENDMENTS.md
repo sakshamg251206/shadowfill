@@ -700,3 +700,71 @@ synthetic fixture, which is a model and not a market: adds outpace cancels so
 the book deepens monotonically, and its cancellation is independent by
 construction, which is the placebo condition rather than a market. H2-H5, the
 L2 ablation and the failure tests are not built.
+
+### X. The placebo test failed, and the comparison design was the reason
+
+**What happened.** Plan 4 lists the placebo first among the failure tests: on a
+stream whose censoring is independent by construction, the measured bias must
+vanish, "and if it does not, the pipeline is broken and no result from it means
+anything." It was run before any result was published. It measured **+0.26**.
+
+**The cause was the comparison, not the arithmetic.** Shadow orders were placed
+on a time grid at the prevailing best price, and compared against real orders
+that arrived at the touch. Measured on the synthetic fixture, grid shadows sat
+behind a median queue of **259** shares; real orders at the touch sat behind
+**42.5**. Queue position is the dominant determinant of whether a passive order
+fills, so a six-fold difference in the conditional queue distribution was being
+reported as the cancellation bias. Stratifying on coarse queue-ahead bands did
+not fix it, because the populations differ *within* a band as well as across.
+
+**The fix.** `place_matched_to_orders` puts one shadow on each real order, at
+that order's own timestamp, price, side and size. The two populations are then
+identical by construction, and the only difference between them is that the
+shadow never cancels — which is the only condition under which the measured gap
+*is* the cancellation bias. This is what the project's name describes and it
+should have been the design from the start; the grid placer was carried over
+from Plan 1, where its job was exercising the engine rather than supporting a
+comparison.
+
+One detail makes the matching exact. The placement is timestamped one
+nanosecond before the order it shadows. Activation is strict
+(`effective_ts < now_ts`) and shadow accounting runs before the book applies an
+event, so the shadow activates on the arriving ADD itself and sees the queue
+*without* the order it is shadowing. Without the offset it would have seen that
+queue plus the order's own size, and the difference would have been
+bookkeeping. A test pins the equality for >90% of pairs; the remainder are
+events sharing a timestamp, where activation may land on a neighbour.
+
+**After the fix the placebo passes**: −0.0000, −0.0002 and −0.0015 at 100 ms,
+1 s and 10 s. It is now `make placebo` and a test that runs on every commit.
+
+**The 60 s row is a window artifact, not a residual bias.** The committed
+fixture spans 200 s, so a 60 s horizon is 30% of it and `F*(10s)` equals
+`F*(60s)` exactly — the ground truth is flat because no shadow survives to be
+observed that far. Horizons must stay short relative to the stream, or the
+comparison measures the window instead of the estimator.
+
+**Consequence.** Every AAPL number produced before this fix came from the
+invalid design and is withdrawn. The README's result is from the matched
+design and post-dates the placebo passing.
+
+### X.1 First result, and what it does to H2
+
+With matched placement, on AAPL for 2019-12-30 09:30–10:07, Kaplan–Meier
+**understates** the never-cancel fill probability by 0.32 at a 60-second
+horizon (0.4203 against 0.1027), with a bootstrap interval of
+[−0.3259, −0.2616].
+
+The mechanism is adverse selection in the risk set. Real orders are cancelled
+within seconds, so by 60 s almost everything still resting is an order nobody
+bothered to pull — and nobody pulls an order that was never going to fill. The
+survivors are selected for *not* filling, and the estimator extrapolates their
+hazard to the whole population.
+
+This is the opposite of the research spec's leading story for H2, which
+predicted that traders cancelling hopeless queues would make censoring-based
+estimators read high. Both mechanisms are named in the spec and it is agnostic
+about which dominates; this window says the second one does, by a wide margin.
+One window at one symbol on one day is not evidence for the hypothesis as
+stated — it is a reason to test it properly across regimes, which is what H2
+asks for and what multiple sessions will allow.

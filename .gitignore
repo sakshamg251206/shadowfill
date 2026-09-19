@@ -8,4 +8,6 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 data/
-results/
+results/**
+!results/*/
+!results/*/manifest.json

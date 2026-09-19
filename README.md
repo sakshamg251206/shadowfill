@@ -15,9 +15,71 @@ that rested in the same book, and a comparison of the never-cancel truth
 against the estimators a passive backtest relies on, with block-bootstrap
 intervals.
 
-**No result is claimed yet.** The measurement has been run only on the
-synthetic fixture, which is a model and not a market. Numbers appear here when
-they come from a real session, traceable to a manifest.
+## The first measurement
+
+AAPL, 2019-12-30, 09:30–10:07 ET. 346,841 events; 180,934 real orders, each
+shadowed by a hypothetical order that never cancels.
+
+| horizon | never-cancel truth | Kaplan–Meier | error | 95% CI |
+|---|---|---|---|---|
+| 100 ms | 0.0190 | 0.0147 | −0.0043 | [−0.0053, −0.0028] |
+| 1 s | 0.0606 | 0.0392 | −0.0215 | [−0.0244, −0.0167] |
+| 10 s | 0.2268 | 0.0789 | −0.1480 | [−0.1557, −0.1230] |
+| 60 s | 0.4203 | 0.1027 | **−0.3176** | [−0.3259, −0.2616] |
+
+A passive order resting at AAPL's touch and never cancelled fills **42%** of
+the time within a minute. Kaplan–Meier fitted on the real orders in the same
+book says **10%**. Every interval excludes zero.
+
+**Why it understates.** Real orders are cancelled within seconds, so by 60 s
+the risk set is almost entirely orders nobody bothered to pull — and nobody
+pulls an order that was never going to fill. The survivors are adversely
+selected for *not* filling, and the estimator extrapolates their hazard to the
+whole population. Treating cancellation as independent censoring assumes the
+cancelled orders would have filled at the survivors' rate; here they would have
+filled at four times it.
+
+Note the sign. The research spec's leading story was that traders cancel
+hopeless queues, which would make censoring-based estimators read *high*. In
+this window the opposite mechanism dominates. That is H2's "the sign is
+regime-dependent, not universal" showing up unprompted, and it is one window,
+not a finding.
+
+**What this is not.** Thirty-seven minutes, one symbol, one day, starting at
+the opening auction — the least representative window of the session. Eight
+bootstrap blocks is thin, and the interval covers within-session variation
+only. Reproduce it with:
+
+    python -m shadowfill.experiment \
+        --message-path data/parquet/date=2019-12-30/symbol=AAPL/events.parquet \
+        --out-dir results/h1-aapl-2019-12-30 --block-ns 300000000000
+
+Every number above is in `results/h1-aapl-2019-12-30/manifest.json` with the
+git commit, input hash and full config that produced it.
+
+## The test that nearly killed this
+
+On the synthetic stream, cancellation is uniform over live orders and therefore
+independent of fill prospects by construction. Kaplan–Meier is *correct* there,
+so ShadowFill must measure no bias. The first design measured **+0.26**.
+
+The fault was the comparison, not the arithmetic. Shadows were being placed on
+a time grid, so they sat behind a median queue of 259 shares while real orders
+at the touch sat behind 42.5 — six times shallower. Queue position dominates
+fill probability, so the difference in *populations* was being reported as the
+cancellation bias.
+
+The fix is what the project is named for: each shadow now shadows a real order,
+at that order's own time, price, side and size. The populations are identical
+by construction and the only difference is that the shadow never cancels. The
+placebo then reads −0.0000, −0.0002 and −0.0015 at 100 ms, 1 s and 10 s.
+
+It runs on every commit:
+
+    make placebo
+
+If it fails, nothing else in this repository means anything, and any result
+measured before it passed is withdrawn — as the earlier grid-based numbers were.
 
 ## Quick start
 

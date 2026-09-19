@@ -1,4 +1,4 @@
-.PHONY: install test test-cpp lint bench reproduce clean
+.PHONY: install test test-cpp lint bench placebo reproduce clean
 
 install:
 	pip install -e ".[dev]"
@@ -19,7 +19,10 @@ lint:
 bench:
 	python benchmarks/bench_replay.py
 
-reproduce: test test-cpp bench
+placebo:
+	pytest tests/python/test_placebo.py -v
+
+reproduce: test test-cpp bench placebo
 	python -m shadowfill.ground_truth --config configs/ground_truth_synthetic.yaml
 
 clean:
