@@ -14,6 +14,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Only needed to fetch Databento data. Kept out of the default install so CI,
+# which never touches the network, does not pull it in.
+data = ["databento>=0.34"]
 dev = [
     "pytest>=8.0",
     "hypothesis>=6.100",
@@ -62,4 +65,12 @@ files = ["python/shadowfill"]
 # stay fully checked, and shadowfill._core has a hand-written stub beside it.
 [[tool.mypy.overrides]]
 module = ["pyarrow.*"]
+ignore_missing_imports = true
+
+# databento is an optional extra, deliberately absent from the default install
+# so CI never pulls a data vendor it cannot use. Scoped per amendment G: the
+# cost guard's own types stay fully checked, and its tests run against a fake
+# client rather than the real package.
+[[tool.mypy.overrides]]
+module = ["databento.*"]
 ignore_missing_imports = true
