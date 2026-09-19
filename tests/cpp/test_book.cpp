@@ -69,3 +69,53 @@ TEST_CASE("arrival sequence is retained for priority comparisons") {
   REQUIRE(b.find(1)->seq == 0);
   REQUIRE(b.find(2)->seq == 7);
 }
+
+TEST_CASE("fifo violations are zero when executions hit the front") {
+  OrderBook b;
+  b.apply(add(0, 1, 100, 10, Side::Bid));
+  b.apply(add(1, 2, 100, 10, Side::Bid));
+  b.apply(Event{2000, 2, 1, 100, 10, EventType::Execute, Side::Bid});
+  b.apply(Event{3000, 3, 2, 100, 10, EventType::Execute, Side::Bid});
+  REQUIRE(b.fifo_violations() == 0);
+}
+
+TEST_CASE("fifo violation counted when an older order is still resting") {
+  OrderBook b;
+  b.apply(add(0, 1, 100, 10, Side::Bid));
+  b.apply(add(1, 2, 100, 10, Side::Bid));
+  b.apply(Event{2000, 2, 2, 100, 10, EventType::Execute, Side::Bid});
+  REQUIRE(b.fifo_violations() == 1);
+}
+
+TEST_CASE("a cancelled order ahead is not a fifo violation") {
+  OrderBook b;
+  b.apply(add(0, 1, 100, 10, Side::Bid));
+  b.apply(add(1, 2, 100, 10, Side::Bid));
+  b.apply(Event{2000, 2, 1, 100, 10, EventType::Delete, Side::Bid});
+  b.apply(Event{3000, 3, 2, 100, 10, EventType::Execute, Side::Bid});
+  REQUIRE(b.fifo_violations() == 0);
+}
+
+TEST_CASE("fifo violations are per level, not per book") {
+  OrderBook b;
+  b.apply(add(0, 1, 99, 10, Side::Bid));
+  b.apply(add(1, 2, 100, 10, Side::Bid));
+  b.apply(Event{2000, 2, 2, 100, 10, EventType::Execute, Side::Bid});
+  REQUIRE(b.fifo_violations() == 0);
+}
+
+TEST_CASE("an unknown id execution is not a fifo violation") {
+  OrderBook b;
+  b.apply(add(0, 1, 100, 10, Side::Bid));
+  b.apply(Event{2000, 1, 999, 100, 4, EventType::Execute, Side::Bid});
+  REQUIRE(b.fifo_violations() == 0);
+  REQUIRE(b.unknown_order_events() == 1);
+}
+
+TEST_CASE("a hidden execution is never a fifo violation") {
+  OrderBook b;
+  b.apply(add(0, 1, 100, 10, Side::Bid));
+  b.apply(add(1, 2, 100, 10, Side::Bid));
+  b.apply(Event{2000, 2, 0, 100, 10, EventType::ExecuteHidden, Side::Bid});
+  REQUIRE(b.fifo_violations() == 0);
+}

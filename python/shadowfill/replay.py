@@ -6,6 +6,7 @@ byte-identical outcomes to this module; where they differ, this module is right.
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 from enum import IntEnum
 
@@ -37,6 +38,20 @@ class RefBook:
         self.bids: dict[int, int] = {}
         self.asks: dict[int, int] = {}
         self.unknown_order_events: int = 0
+        self.fifo_violations: int = 0
+        # Arrival-ordered order ids per (side, price). Cancels can remove an
+        # order from the middle, so the queue is purged lazily from the front;
+        # each id is discarded at most once, so this stays O(1) amortised.
+        self._level_q: dict[tuple[int, int], deque[int]] = {}
+
+    def _oldest_resting(self, side: int, price: int) -> Resting | None:
+        """The earliest-arrived order still resting at this price, or None."""
+        q = self._level_q.get((side, price))
+        if q is None:
+            return None
+        while q and q[0] not in self.orders:
+            q.popleft()
+        return self.orders[q[0]] if q else None
 
     def _levels(self, side: int) -> dict[int, int]:
         return self.bids if side == Side.BID else self.asks
@@ -64,10 +79,22 @@ class RefBook:
             self.orders[order_id] = Resting(price=price, size=size, seq=seq, side=side)
             levels = self._levels(side)
             levels[price] = levels.get(price, 0) + size
+            self._level_q.setdefault((side, price), deque()).append(order_id)
             return
 
         if etype in (EventType.CANCEL_PARTIAL, EventType.DELETE, EventType.EXECUTE):
             order = self.orders.get(order_id)
+            if etype == EventType.EXECUTE and order is not None:
+                # Price-time priority says a marketable order hits the front of
+                # the level. If an order that arrived earlier is still resting
+                # here, the exchange did not match FIFO as reconstructed, which
+                # on real data means hidden liquidity, an order type this
+                # reconstruction does not model, or a genuine gap in it. A
+                # correct FIFO stream gives zero. Deliberately says nothing
+                # about any shadow: it is a property of the data alone.
+                oldest = self._oldest_resting(order.side, order.price)
+                if oldest is not None and oldest.seq < order.seq:
+                    self.fifo_violations += 1
             if order is None:
                 # Added before the recording window or outside the level band.
                 self.unknown_order_events += 1
@@ -218,7 +245,18 @@ class RefShadowTracker:
         self._active: list[_Active] = []
         self.outcomes: dict[int, Outcome] = {}
         self.unknown_order_assumed_ahead = 0
-        self.fifo_violations = 0
+
+    @property
+    def fifo_violations(self) -> int:
+        """Price-time priority breaches seen in the data (see RefBook).
+
+        It lives on the book, not here, because it is a property of the event
+        stream alone. The earlier shadow-relative version of this counter fired
+        whenever a shadow reached the front of its queue and was filled there --
+        the normal path, not a defect -- so it could never be zero on a correct
+        FIFO stream and told us nothing about the data.
+        """
+        return self.book.fifo_violations
 
     def _activate(self, now_ts: int, now_seq: int) -> None:
         while self._next < len(self._pending):
@@ -278,9 +316,9 @@ class RefShadowTracker:
                     a.outcome.assumed_ahead_events += 1
                 a.ahead = max(0, a.ahead - size)
                 continue
-            # EXECUTE: price-time priority means the front of the queue is hit first.
-            if a.ahead == 0 and not self._is_ahead(order_id, a.outcome.insert_seq):
-                self.fifo_violations += 1
+            # EXECUTE: price-time priority means the front of the queue is hit
+            # first, so whatever this execution does not consume of `ahead`
+            # reaches the shadow.
             consumed = min(size, a.ahead)
             a.ahead -= consumed
             residual = size - consumed

@@ -84,10 +84,9 @@ void ShadowTracker::match(const Event& ev) {
       continue;
     }
 
-    // EXECUTE: price-time priority means the front of the queue is hit first.
-    if (a.ahead == 0 && !is_ahead(ev.order_id, a.outcome.insert_seq)) {
-      ++fifo_violations_;
-    }
+    // EXECUTE: price-time priority means the front of the queue is hit first,
+    // so whatever this execution does not consume of `ahead` reaches the
+    // shadow.
     const std::int64_t consumed = std::min(ev.size, a.ahead);
     a.ahead -= consumed;
     const std::int64_t residual = ev.size - consumed;

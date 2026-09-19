@@ -64,8 +64,12 @@ class ShadowTracker {
   [[nodiscard]] std::uint64_t unknown_order_assumed_ahead() const noexcept {
     return unknown_order_assumed_ahead_;
   }
+  /// Delegates to the book: this counts breaches in the data, not anything
+  /// about a shadow. The earlier shadow-relative version fired whenever a
+  /// shadow reached the front of its queue and filled there -- the normal
+  /// path -- so it could never be zero on a correct FIFO stream.
   [[nodiscard]] std::uint64_t fifo_violations() const noexcept {
-    return fifo_violations_;
+    return book_.fifo_violations();
   }
   [[nodiscard]] const OrderBook& book() const noexcept { return book_; }
 
@@ -91,7 +95,6 @@ class ShadowTracker {
   std::vector<Active> active_;
   std::vector<Outcome> outcomes_;
   std::uint64_t unknown_order_assumed_ahead_ = 0;
-  std::uint64_t fifo_violations_ = 0;
 };
 
 }  // namespace shadowfill

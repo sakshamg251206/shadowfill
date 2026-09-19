@@ -96,3 +96,56 @@ def test_top_of_book_series_reports_state_after_each_event():
     assert tob["best_bid"].tolist() == [100, 100, 101, 100, 100]
     assert tob["best_ask"].tolist() == [0, 105, 105, 105, 105]
     assert tob["seq"].tolist() == [0, 1, 2, 3, 4]
+
+
+def test_fifo_violations_zero_when_executions_hit_the_front_of_the_level():
+    b = RefBook()
+    add(b, 0, 1, 100, 10, Side.BID)
+    add(b, 1, 2, 100, 10, Side.BID)
+    b.apply(2000, 2, 1, 100, 10, EventType.EXECUTE, Side.BID)  # oldest first
+    b.apply(3000, 3, 2, 100, 10, EventType.EXECUTE, Side.BID)  # then the next
+    assert b.fifo_violations == 0
+
+
+def test_fifo_violation_counted_when_an_older_order_is_still_resting():
+    b = RefBook()
+    add(b, 0, 1, 100, 10, Side.BID)
+    add(b, 1, 2, 100, 10, Side.BID)
+    b.apply(2000, 2, 2, 100, 10, EventType.EXECUTE, Side.BID)  # skips oid 1
+    assert b.fifo_violations == 1
+
+
+def test_a_cancelled_order_ahead_does_not_count_as_a_violation():
+    """The queue is purged lazily, so a cancelled id must not look 'still resting'."""
+    b = RefBook()
+    add(b, 0, 1, 100, 10, Side.BID)
+    add(b, 1, 2, 100, 10, Side.BID)
+    b.apply(2000, 2, 1, 100, 10, EventType.DELETE, Side.BID)
+    b.apply(3000, 3, 2, 100, 10, EventType.EXECUTE, Side.BID)
+    assert b.fifo_violations == 0
+
+
+def test_fifo_violations_are_per_level_not_per_book():
+    """An older order at a *different* price has no priority over this one."""
+    b = RefBook()
+    add(b, 0, 1, 99, 10, Side.BID)
+    add(b, 1, 2, 100, 10, Side.BID)
+    b.apply(2000, 2, 2, 100, 10, EventType.EXECUTE, Side.BID)
+    assert b.fifo_violations == 0
+
+
+def test_execution_of_an_unknown_id_is_not_a_fifo_violation():
+    """An id absent from the book carries no arrival sequence to compare."""
+    b = RefBook()
+    add(b, 0, 1, 100, 10, Side.BID)
+    b.apply(2000, 1, 999, 100, 4, EventType.EXECUTE, Side.BID)
+    assert b.fifo_violations == 0
+    assert b.unknown_order_events == 1
+
+
+def test_hidden_execution_is_never_a_fifo_violation():
+    b = RefBook()
+    add(b, 0, 1, 100, 10, Side.BID)
+    add(b, 1, 2, 100, 10, Side.BID)
+    b.apply(2000, 2, 0, 100, 10, EventType.EXECUTE_HIDDEN, Side.BID)
+    assert b.fifo_violations == 0

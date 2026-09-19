@@ -16,13 +16,26 @@ void OrderBook::reduce_level(Side side, std::int64_t price, std::int64_t qty) {
   }
 }
 
+const OrderBook::Resting* OrderBook::oldest_resting(Side side,
+                                                   std::int64_t price) {
+  auto& per_price = (side == Side::Bid) ? bid_q_ : ask_q_;
+  auto lvl = per_price.find(price);
+  if (lvl == per_price.end()) return nullptr;
+  auto& q = lvl->second;
+  while (!q.empty() && orders_.find(q.front()) == orders_.end()) q.pop_front();
+  if (q.empty()) return nullptr;
+  return &orders_.at(q.front());
+}
+
 void OrderBook::apply(const Event& ev) {
   if (ev.type == EventType::Add) {
     orders_[ev.order_id] = Resting{ev.price, ev.size, ev.seq, ev.side};
     if (ev.side == Side::Bid) {
       bids_[ev.price] += ev.size;
+      bid_q_[ev.price].push_back(ev.order_id);
     } else {
       asks_[ev.price] += ev.size;
+      ask_q_[ev.price].push_back(ev.order_id);
     }
     return;
   }
@@ -30,6 +43,13 @@ void OrderBook::apply(const Event& ev) {
   if (!consumes_visible_queue(ev.type)) return;
 
   auto it = orders_.find(ev.order_id);
+  if (ev.type == EventType::Execute && it != orders_.end()) {
+    const Resting* oldest = oldest_resting(it->second.side, it->second.price);
+    if (oldest != nullptr && oldest->seq < it->second.seq) ++fifo_violations_;
+    it = orders_.find(ev.order_id);  // oldest_resting may rehash nothing, but
+                                     // re-find keeps the iterator obviously
+                                     // valid rather than subtly so.
+  }
   if (it == orders_.end()) {
     // Added before the recording window or outside the level band.
     ++unknown_order_events_;
