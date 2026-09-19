@@ -1,5 +1,9 @@
 #pragma once
 #include <cstdint>
+#include <deque>
+#include <queue>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "shadowfill/book.hpp"
@@ -79,20 +83,39 @@ class ShadowTracker {
     Outcome outcome;
     std::int64_t ahead;
     std::int64_t expiry_ts;
+    bool settled = false;
   };
+
+  /// One bucket per (side, price). An event can only touch shadows resting at
+  /// its own price on its own side, so matching never looks at the rest.
+  [[nodiscard]] static std::uint64_t level_key(Side side,
+                                               std::int64_t price) noexcept {
+    return static_cast<std::uint64_t>(price) * 2U +
+           (side == Side::Bid ? 1U : 0U);
+  }
 
   void activate(std::int64_t now_ts, std::uint64_t now_seq);
   void expire(std::int64_t now_ts);
   void match(const Event& ev);
-  void harvest_filled();
   [[nodiscard]] bool is_ahead(std::uint64_t order_id,
                               std::int64_t insert_seq) const;
-  void settle(const Outcome& outcome);
+  void settle(std::size_t index);
 
   OrderBook book_;
   std::vector<Placement> pending_;
   std::size_t next_ = 0;
-  std::vector<Active> active_;
+
+  // Stable storage: indices into this are held by the level buckets and the
+  // expiry heap, so entries are marked settled rather than erased. Memory is
+  // therefore O(total placements) rather than O(live ones).
+  // ponytail: fine while a run's placements fit in memory (400k ~= 45 MB);
+  // recycle settled slots via a free list if a run ever outgrows that.
+  std::deque<Active> actives_;
+  std::unordered_map<std::uint64_t, std::vector<std::size_t>> by_level_;
+
+  using Expiry = std::pair<std::int64_t, std::size_t>;
+  std::priority_queue<Expiry, std::vector<Expiry>, std::greater<>> expiries_;
+
   std::vector<Outcome> outcomes_;
   std::uint64_t unknown_order_assumed_ahead_ = 0;
 };

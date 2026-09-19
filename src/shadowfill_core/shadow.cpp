@@ -15,8 +15,10 @@ ShadowTracker::ShadowTracker(std::vector<Placement> placements)
   outcomes_.reserve(pending_.size());
 }
 
-void ShadowTracker::settle(const Outcome& outcome) {
-  outcomes_.push_back(outcome);
+void ShadowTracker::settle(std::size_t index) {
+  Active& a = actives_[index];
+  a.settled = true;
+  outcomes_.push_back(a.outcome);
 }
 
 /// Strictly `effective_ts < now_ts`, and the outcome records the placement's
@@ -37,22 +39,28 @@ void ShadowTracker::activate(std::int64_t now_ts, std::uint64_t now_seq) {
     o.insert_ts = p.effective_ts();
     o.insert_seq = static_cast<std::int64_t>(now_seq);
     o.ahead_at_insert = book_.level_size(p.side, p.price);
-    active_.push_back(
-        Active{p, o, o.ahead_at_insert, p.effective_ts() + p.horizon_ns});
+
+    const std::size_t index = actives_.size();
+    const std::int64_t expiry = p.effective_ts() + p.horizon_ns;
+    actives_.push_back(Active{p, o, o.ahead_at_insert, expiry, false});
+    by_level_[level_key(p.side, p.price)].push_back(index);
+    expiries_.emplace(expiry, index);
     ++next_;
   }
 }
 
+/// Only the shadows actually due are touched, so a quiet event costs one heap
+/// comparison rather than a scan of everything still live.
 void ShadowTracker::expire(std::int64_t now_ts) {
-  auto it = std::stable_partition(
-      active_.begin(), active_.end(),
-      [now_ts](const Active& a) { return a.expiry_ts >= now_ts; });
-  for (auto e = it; e != active_.end(); ++e) {
-    e->outcome.status = Status::Expired;
-    e->outcome.ahead_at_end = e->ahead;
-    settle(e->outcome);
+  while (!expiries_.empty() && expiries_.top().first < now_ts) {
+    const std::size_t index = expiries_.top().second;
+    expiries_.pop();
+    Active& a = actives_[index];
+    if (a.settled) continue;
+    a.outcome.status = Status::Expired;
+    a.outcome.ahead_at_end = a.ahead;
+    settle(index);
   }
-  active_.erase(it, active_.end());
 }
 
 /// Non-counting priority lookup: an id absent from the book is assumed ahead.
@@ -69,18 +77,33 @@ void ShadowTracker::match(const Event& ev) {
   // ADD is behind us; hidden/cross/halt touch no visible queue.
   if (!consumes_visible_queue(ev.type)) return;
 
-  for (Active& a : active_) {
-    if (a.placement.side != ev.side || a.placement.price != ev.price) continue;
+  auto bucket = by_level_.find(level_key(ev.side, ev.price));
+  if (bucket == by_level_.end()) return;
+  std::vector<std::size_t>& indices = bucket->second;
+
+  // Settled shadows are dropped from the bucket as they are encountered, by
+  // swapping in the last element. Each one is removed at most once, so the
+  // clean-up is amortised O(1) and the bucket stays the size of what is live.
+  std::size_t i = 0;
+  while (i < indices.size()) {
+    Active& a = actives_[indices[i]];
+    if (a.settled) {
+      indices[i] = indices.back();
+      indices.pop_back();
+      continue;
+    }
 
     if (ev.type != EventType::Execute) {
-      if (!is_ahead(ev.order_id, a.outcome.insert_seq)) continue;
-      if (a.ahead > 0 && book_.find(ev.order_id) == nullptr) {
-        // The decrement rests on the unverifiable assumption that an id absent
-        // from the book was resting ahead of the shadow.
-        ++unknown_order_assumed_ahead_;
-        ++a.outcome.assumed_ahead_events;
+      if (is_ahead(ev.order_id, a.outcome.insert_seq)) {
+        if (a.ahead > 0 && book_.find(ev.order_id) == nullptr) {
+          // The decrement rests on the unverifiable assumption that an id
+          // absent from the book was resting ahead of the shadow.
+          ++unknown_order_assumed_ahead_;
+          ++a.outcome.assumed_ahead_events;
+        }
+        a.ahead = std::max<std::int64_t>(0, a.ahead - ev.size);
       }
-      a.ahead = std::max<std::int64_t>(0, a.ahead - ev.size);
+      ++i;
       continue;
     }
 
@@ -90,27 +113,32 @@ void ShadowTracker::match(const Event& ev) {
     const std::int64_t consumed = std::min(ev.size, a.ahead);
     a.ahead -= consumed;
     const std::int64_t residual = ev.size - consumed;
-    if (residual <= 0) continue;
+    if (residual <= 0) {
+      ++i;
+      continue;
+    }
 
     const std::int64_t remaining = a.placement.size - a.outcome.filled_qty;
     const std::int64_t fill = std::min(residual, remaining);
-    if (fill <= 0) continue;
+    if (fill <= 0) {
+      ++i;
+      continue;
+    }
     if (a.outcome.filled_qty == 0) a.outcome.first_fill_ts = ev.ts_ns;
     a.outcome.filled_qty += fill;
     if (a.outcome.filled_qty >= a.placement.size) {
       a.outcome.full_fill_ts = ev.ts_ns;
       a.outcome.status = Status::Filled;
       a.outcome.ahead_at_end = a.ahead;
+      // A filled outcome is final, so it is settled here rather than in a
+      // separate harvest pass over everything still live.
+      settle(indices[i]);
+      indices[i] = indices.back();
+      indices.pop_back();
+      continue;
     }
+    ++i;
   }
-}
-
-void ShadowTracker::harvest_filled() {
-  auto it = std::stable_partition(
-      active_.begin(), active_.end(),
-      [](const Active& a) { return a.outcome.status != Status::Filled; });
-  for (auto e = it; e != active_.end(); ++e) settle(e->outcome);
-  active_.erase(it, active_.end());
 }
 
 /// Per event, in exactly this order. Activation precedes expiry so a placement
@@ -122,17 +150,16 @@ void ShadowTracker::on_event(const Event& ev) {
   activate(ev.ts_ns, ev.seq);
   expire(ev.ts_ns);
   match(ev);
-  harvest_filled();
   book_.apply(ev);
 }
 
 void ShadowTracker::finalize() {
-  for (Active& a : active_) {
-    a.outcome.status = Status::Truncated;
-    a.outcome.ahead_at_end = a.ahead;
-    settle(a.outcome);
+  for (std::size_t i = 0; i < actives_.size(); ++i) {
+    if (actives_[i].settled) continue;
+    actives_[i].outcome.status = Status::Truncated;
+    actives_[i].outcome.ahead_at_end = actives_[i].ahead;
+    settle(i);
   }
-  active_.clear();
   // Never activated: the effective timestamp fell past the last event, so the
   // order never existed. Distinct from Truncated, which is a censored
   // observation of an order that did.
@@ -140,7 +167,7 @@ void ShadowTracker::finalize() {
     Outcome o;
     o.shadow_id = pending_[next_].shadow_id;
     o.status = Status::NotActivated;
-    settle(o);
+    outcomes_.push_back(o);
     ++next_;
   }
   std::sort(outcomes_.begin(), outcomes_.end(),
