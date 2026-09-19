@@ -2,6 +2,7 @@
 #include <pybind11/pybind11.h>
 
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "shadowfill/shadow.hpp"
@@ -106,6 +107,20 @@ py::dict replay(Arr<std::int64_t> ts_ns, Arr<std::uint64_t> seq,
 
 PYBIND11_MODULE(_core, m) {
   m.doc() = "ShadowFill C++ replay engine";
+
+  // Amendment H: a result that cannot be traced to an environment is not
+  // reproducible, and this repository leans on that claim. The manifest records
+  // which compiler built the engine that produced the numbers.
+#if defined(__clang__)
+  m.attr("compiler") = "clang " __clang_version__;
+#elif defined(__GNUC__)
+  m.attr("compiler") = "gcc " __VERSION__;
+#elif defined(_MSC_VER)
+  m.attr("compiler") = "msvc " + std::to_string(_MSC_VER);
+#else
+  m.attr("compiler") = "unknown";
+#endif
+
   m.def("replay", &replay, "Replay MBO events and evaluate shadow placements",
         py::arg("ts_ns"), py::arg("seq"), py::arg("order_id"), py::arg("price"),
         py::arg("size"), py::arg("type"), py::arg("side"),

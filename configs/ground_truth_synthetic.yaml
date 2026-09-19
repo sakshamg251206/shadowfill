@@ -1,0 +1,7 @@
+message_path: tests/fixtures/synthetic_mbo_v1.csv
+out_dir: results/synthetic
+grid_ns: 100000000       # 100 ms
+size: 100
+horizon_ns: 60000000000  # 60 s
+latency_ns: 0
+engine: cpp

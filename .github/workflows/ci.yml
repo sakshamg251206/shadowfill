@@ -1,7 +1,6 @@
 name: ci
 on: [push, pull_request]
 
-# The cpp job arrives in Task 9, with the C++ engine it would test.
 jobs:
   python:
     runs-on: ubuntu-latest
@@ -13,4 +12,35 @@ jobs:
       - run: pip install -r requirements-dev.lock
       - run: pip install -e ".[dev]"
       - run: make lint
+      # SHADOWFILL_REQUIRE_CORE turns a missing extension module into a
+      # collection error instead of a skip. The equivalence test guards itself
+      # with importorskip, which is right for a pure-Python checkout and wrong
+      # here: a wheel built without the engine would skip the only test that
+      # validates it and the job would go green over an unvalidated engine.
       - run: pytest -v -m "not needs_lobster"
+        env:
+          SHADOWFILL_REQUIRE_CORE: "1"
+
+  cpp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: make test-cpp
+
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.lock
+      - run: pip install -e ".[dev]"
+      # A shared runner is noisy, so this gate catches an order-of-magnitude
+      # regression, not a few percent. The engine is ~10x over the gate on
+      # developer hardware; if this starts failing, read the printed rate
+      # before assuming the runner was slow.
+      - run: make bench

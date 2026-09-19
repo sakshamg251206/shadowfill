@@ -375,8 +375,14 @@ class RefShadowTracker:
             self._next += 1
 
 
-def run_reference(events: np.ndarray, placements: list[Placement]) -> list[Outcome]:
-    """Replay ``events`` and return one Outcome per placement, ordered by shadow_id."""
+def replay_reference(
+    events: np.ndarray, placements: list[Placement]
+) -> tuple[list[Outcome], dict[str, int]]:
+    """Replay ``events`` and return (outcomes ordered by shadow_id, diagnostics).
+
+    The diagnostics carry the same three counters the C++ engine reports, so a
+    run is traceable whichever engine produced it.
+    """
     tracker = RefShadowTracker(RefBook(), placements)
     for e in events:
         tracker.on_event(
@@ -389,4 +395,17 @@ def run_reference(events: np.ndarray, placements: list[Placement]) -> list[Outco
             int(e["side"]),
         )
     tracker.finalize()
-    return [tracker.outcomes[p.shadow_id] for p in sorted(placements, key=lambda x: x.shadow_id)]
+    outcomes = [
+        tracker.outcomes[p.shadow_id] for p in sorted(placements, key=lambda x: x.shadow_id)
+    ]
+    diagnostics = {
+        "unknown_order_assumed_ahead": tracker.unknown_order_assumed_ahead,
+        "fifo_violations": tracker.fifo_violations,
+        "unknown_order_events": tracker.book.unknown_order_events,
+    }
+    return outcomes, diagnostics
+
+
+def run_reference(events: np.ndarray, placements: list[Placement]) -> list[Outcome]:
+    """Replay ``events`` and return one Outcome per placement, ordered by shadow_id."""
+    return replay_reference(events, placements)[0]

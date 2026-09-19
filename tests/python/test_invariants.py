@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 
-from shadowfill.events import EventType, Side
+from shadowfill.events import EventType
+from shadowfill.placements import place_top_of_book_grid
 from shadowfill.replay import Placement, RefBook, RefShadowTracker, Status, run_reference
 from shadowfill.synthetic import generate_synthetic_messages
 
@@ -9,37 +10,19 @@ SEC = 1_000_000_000
 
 
 def grid_placements(events, *, every=500, size=5, horizon=2 * SEC):
-    """Place one shadow per side every ``every`` events at the prevailing best."""
-    book = RefBook()
-    placements = []
-    sid = 0
-    for i, e in enumerate(events):
-        if i % every == 0:
-            for side, price in ((Side.BID, book.best_bid()), (Side.ASK, book.best_ask())):
-                if price is None:
-                    continue
-                placements.append(
-                    Placement(
-                        shadow_id=sid,
-                        ts_ns=int(e["ts_ns"]),
-                        latency_ns=0,
-                        side=int(side),
-                        price=price,
-                        size=size,
-                        horizon_ns=horizon,
-                    )
-                )
-                sid += 1
-        book.apply(
-            int(e["ts_ns"]),
-            int(e["seq"]),
-            int(e["order_id"]),
-            int(e["price"]),
-            int(e["size"]),
-            int(e["type"]),
-            int(e["side"]),
-        )
-    return placements
+    """Event-count grid, expressed via the shared time-grid placer.
+
+    These tests were written against an every-N-events grid; the production
+    placer is on a time grid. Converting via the stream's mean inter-event time
+    keeps roughly the same placement density while exercising the same code
+    path the runner uses, so the invariants guard the real placer rather than a
+    test-only copy of it.
+    """
+    span = int(events["ts_ns"][-1]) - int(events["ts_ns"][0])
+    grid_ns = max(1, span * every // max(1, len(events)))
+    return place_top_of_book_grid(
+        events, grid_ns=grid_ns, size=size, horizon_ns=horizon, latency_ns=0
+    )
 
 
 @pytest.fixture(scope="module")

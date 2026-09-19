@@ -56,3 +56,10 @@ known-first-party = ["shadowfill"]
 python_version = "3.11"
 strict = true
 files = ["python/shadowfill"]
+
+# pyarrow ships neither stubs nor a py.typed marker. Scoped to that package
+# rather than relaxing strict mode, per amendment G: the engine's own types
+# stay fully checked, and shadowfill._core has a hand-written stub beside it.
+[[tool.mypy.overrides]]
+module = ["pyarrow.*"]
+ignore_missing_imports = true
