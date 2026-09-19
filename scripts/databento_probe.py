@@ -212,6 +212,37 @@ def analyse(path: Path) -> int:
     return 0
 
 
+def explain_vendor_error(exc: Exception) -> int:
+    """Turn a vendor rejection into something actionable.
+
+    The guard's contract is that no unpriced or over-budget request is ever
+    sent. It cannot promise the vendor will accept a request it approved, so a
+    refusal here is expected behaviour, not a bug -- but it should read like an
+    explanation rather than a stack trace.
+    """
+    text = str(exc)
+    print(f"\nDatabento refused the request: {type(exc).__name__}")
+    print(f"  {text.splitlines()[0] if text else exc}")
+    print("\nNothing was downloaded and nothing was charged: the request was")
+    print("rejected before it was created.")
+
+    if "insufficient_funds" in text or "402" in text:
+        print("\nThis says 'insufficient budget' even when free credits remain.")
+        print("Known things to check in the portal, cheapest first:")
+        print("  1. Is a payment method on file? Databento asks for one at")
+        print("     registration to verify the account. Requests can be refused")
+        print("     without one even though the card is not charged while credits")
+        print("     last.")
+        print("  2. Is there a spending limit or budget set to 0 for the")
+        print("     dataset or the team?")
+        print("  3. Is XNAS.ITCH entitled on this plan? An unentitled dataset can")
+        print("     present as a budget failure rather than a permissions one.")
+        print("\n  https://databento.com/docs/portal/billing")
+        print("\nPricing still works, so the survey and window scans remain")
+        print("available while this is sorted out.")
+    return 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -290,6 +321,8 @@ def main() -> int:
     except BudgetExceededError as exc:
         print(f"\n{exc}")
         return 1
+    except Exception as exc:  # the vendor refused; explain rather than traceback
+        return explain_vendor_error(exc)
 
     print(f"\ndownloaded {args.out} for ${spent.usd:.5f}")
     return analyse(args.out)
