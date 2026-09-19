@@ -45,4 +45,7 @@ def itch_sample():
         pytest.skip(f"no settled ITCH sample in {ITCH_DIR}; run scripts/fetch_itch_sample.sh")
     # Largest by bytes, not by name: a 2 MB and a 20 MB prefix of the same day
     # sort the wrong way round, and the short one covers too little to validate.
-    return max(settled, key=lambda p: p.stat().st_size)
+    # Capped, because a full day is 3.5 GB and this suite runs routinely; point
+    # SHADOWFILL_ITCH_SAMPLE at a bigger file to validate against one.
+    usable = [p for p in settled if p.stat().st_size <= 64 * 1024 * 1024] or settled
+    return max(usable, key=lambda p: p.stat().st_size)

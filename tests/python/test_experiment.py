@@ -36,6 +36,7 @@ def result(session, tmp_path_factory):
         block_ns=2 * SEC,
         n_replicates=40,
         seed=5,
+        window_ns=None,
     )
     return manifest, out
 
@@ -83,6 +84,7 @@ def test_the_run_is_reproducible_from_its_manifest(session, tmp_path):
         block_ns=2 * SEC,
         n_replicates=20,
         seed=5,
+        window_ns=None,
     )
     first = run_h1(out_dir=tmp_path / "a", **kwargs)
     second = run_h1(out_dir=tmp_path / "b", **kwargs)
@@ -101,3 +103,51 @@ def test_the_printed_table_shows_every_horizon(result):
     text = format_table(manifest["rows"])
     assert "100ms" in text and "1s" in text and "10s" in text
     assert "naive err" in text
+
+
+def test_the_window_excludes_events_outside_regular_hours(tmp_path):
+    """Pre-market barely trades, so including it drives every rate to zero.
+
+    Measured: UN's whole 04:00-09:30 on 2019-12-30 contained no executions at
+    all, and the unwindowed run reported 0.0000 across every horizon and
+    stratum.
+    """
+    from shadowfill.dataset import write_events
+    from shadowfill.events import EventType, Side, empty_events
+    from shadowfill.experiment import REGULAR_HOURS_NS
+
+    open_ns = REGULAR_HOURS_NS[0]
+    rows = []
+    # Two pre-market adds that must be excluded, then a real session.
+    rows.append((open_ns - 10 * SEC, 1, 100, 50, EventType.ADD, Side.BID))
+    rows.append((open_ns - 5 * SEC, 2, 100, 50, EventType.ADD, Side.BID))
+    # One order that rests for the whole window, so the grid placer always sees
+    # a best price; without it the book empties between events and no shadow is
+    # ever placed.
+    rows.append((open_ns, 999, 100, 10_000, EventType.ADD, Side.BID))
+    for i in range(400):
+        ts = open_ns + i * SEC
+        rows.append((ts, 1000 + i, 100, 50, EventType.ADD, Side.BID))
+        rows.append((ts + SEC // 2, 1000 + i, 100, 50, EventType.EXECUTE, Side.BID))
+
+    events = empty_events(len(rows))
+    for i, (ts, oid, price, size, etype, side) in enumerate(rows):
+        events[i] = (ts, i, oid, price, size, int(etype), int(side))
+    path = tmp_path / "events.parquet"
+    write_events(events, path)
+
+    manifest = run_h1(
+        message_path=path,
+        out_dir=tmp_path / "out",
+        grid_ns=SEC,
+        size=5,
+        horizon_ns=10 * SEC,
+        engine="python",
+        horizons=np.array([SEC], dtype=np.int64),
+        at_touch_only=False,
+        block_ns=60 * SEC,
+        n_replicates=10,
+    )
+    assert manifest["n_events"] == len(rows) - 2
+    assert manifest["n_events_before_window"] == len(rows)
+    assert manifest["window_ns"] == list(REGULAR_HOURS_NS)

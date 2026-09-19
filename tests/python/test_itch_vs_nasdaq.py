@@ -97,3 +97,33 @@ def test_replace_messages_are_split_and_are_not_rare(parsed):
     adds = kinds.get(int(EventType.ADD), 0)
     removals = kinds.get(int(EventType.DELETE), 0) + kinds.get(int(EventType.CANCEL_PARTIAL), 0)
     assert adds > 0 and removals > 0
+
+
+def test_both_engines_agree_on_real_exchange_data(parsed):
+    """Invariant 5, checked against an exchange rather than our own generator.
+
+    The equivalence suite runs on synthetic events, which the same person wrote
+    as the engines. Real ITCH carries order-id patterns, price levels and
+    removal sequences nobody designed for this code, and it is the only place a
+    shared wrong assumption would show up.
+    """
+    from shadowfill.ground_truth import OUTCOME_FIELDS, compute_outcomes
+    from shadowfill.placements import place_top_of_book_grid
+
+    pytest.importorskip("shadowfill._core")
+    events, _ = parsed
+    placements = place_top_of_book_grid(
+        events[:60_000],
+        grid_ns=100_000_000,
+        size=100,
+        horizon_ns=60_000_000_000,
+        latency_ns=0,
+    )
+    if not placements:
+        pytest.skip("sample produced no placements")
+
+    cpp, cpp_diag = compute_outcomes(events[:60_000], placements, "cpp")
+    py, py_diag = compute_outcomes(events[:60_000], placements, "python")
+    for field in OUTCOME_FIELDS:
+        np.testing.assert_array_equal(cpp[field], py[field], err_msg=field)
+    assert cpp_diag == py_diag

@@ -35,6 +35,12 @@ from .lifetimes import extract_lifetimes
 from .placements import place_top_of_book_grid
 from .provenance import environment, git_sha, sha256_file
 
+#: US equities regular trading hours, as ns since midnight. Pre- and post-market
+#: sessions barely trade: on 2019-12-30 the whole 04:00-09:30 pre-market for UN
+#: produced no executions at all, so every fill rate computed over it is zero and
+#: every shadow placed in it is un-fillable noise in the denominator.
+REGULAR_HOURS_NS = (34_200_000_000_000, 57_600_000_000_000)
+
 #: Half an hour. Long enough that queue dynamics decorrelate across blocks,
 #: short enough that a single session still yields a usable number of them.
 DEFAULT_BLOCK_NS = 1_800_000_000_000
@@ -55,6 +61,7 @@ def run_h1(
     n_replicates: int = 200,
     seed: int = 0,
     ahead_edges: Sequence[int] = DEFAULT_AHEAD_EDGES,
+    window_ns: tuple[int, int] | None = REGULAR_HOURS_NS,
 ) -> dict[str, Any]:
     """Measure H1 on one session and write h1_curves.parquet + manifest.json."""
     message_path = Path(message_path)
@@ -62,8 +69,14 @@ def run_h1(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     events, input_format = load_messages(message_path)
+    n_events_total = len(events)
+    if window_ns is not None:
+        # Orders resting from before the window become unknown-id removals and
+        # are assumed ahead, which is the documented behaviour for any window
+        # that does not start at the session open. The count is in diagnostics.
+        events = events[(events["ts_ns"] >= window_ns[0]) & (events["ts_ns"] < window_ns[1])]
     if len(events) == 0:
-        raise ValueError(f"{message_path} contains no events")
+        raise ValueError(f"{message_path} has no events in window {window_ns}")
 
     placements = place_top_of_book_grid(
         events, grid_ns=grid_ns, size=size, horizon_ns=horizon_ns, latency_ns=latency_ns
@@ -129,6 +142,8 @@ def run_h1(
         "input_format": input_format,
         "input_sha256": sha256_file(message_path),
         "n_events": len(events),
+        "n_events_before_window": n_events_total,
+        "window_ns": list(window_ns) if window_ns else None,
         "n_placements": len(placements),
         "n_shadows_activated": comparison.n_shadows,
         "n_orders": comparison.n_orders,
@@ -206,6 +221,17 @@ def main() -> None:
     parser.add_argument("--n-replicates", type=int, default=200)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
+        "--window-ns",
+        nargs=2,
+        type=int,
+        metavar=("START", "END"),
+        default=list(REGULAR_HOURS_NS),
+        help="ns since midnight; default is regular trading hours",
+    )
+    parser.add_argument(
+        "--no-window", action="store_true", help="use the whole session, including pre-market"
+    )
+    parser.add_argument(
         "--all-depths",
         action="store_true",
         help="do not restrict real orders to the touch (not comparable with shadows)",
@@ -224,6 +250,7 @@ def main() -> None:
         block_ns=args.block_ns,
         n_replicates=args.n_replicates,
         seed=args.seed,
+        window_ns=None if args.no_window else (args.window_ns[0], args.window_ns[1]),
     )
     print(format_table(manifest["rows"]))
     print(
