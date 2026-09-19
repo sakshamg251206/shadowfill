@@ -42,6 +42,28 @@ DATASET = "XNAS.ITCH"
 
 SYMBOL = "AAPL"
 START = "2024-06-03T14:30:00"
+
+# For H2 the quantity that matters is the RELATIVE tick, tick divided by price.
+# Every US equity has a $0.01 tick, so price alone sets the regime: a very
+# expensive share has a minuscule relative tick, many price levels and a thin
+# queue at the touch; a cheap one has a coarse relative tick, few levels and a
+# deep queue. These four span roughly three orders of magnitude of relative
+# tick while holding the venue and matching rules fixed, which is the
+# comparison amendment U argued for.
+SURVEY_SYMBOLS = [
+    ("BKNG", "very small relative tick"),
+    ("AAPL", "small"),
+    ("F", "large"),
+    ("SIRI", "very large relative tick"),
+]
+
+# Block bootstrap is over sessions, never over individual orders, so the
+# experiment needs several distinct days rather than a long single one.
+SURVEY_DAYS = ["2024-06-03", "2024-06-04", "2024-06-05", "2024-06-06", "2024-06-07"]
+
+# A regular-trading-hours slice. Starting away from UTC midnight means a book
+# snapshot is prepended, which is wanted: it identifies orders already resting.
+SURVEY_WINDOW = ("T13:30:00", "T20:00:00")
 DEFAULT_WINDOWS = "10s,1m,5m,15m,1h,4h"
 
 # Measured 2026-09-19: 10s, 1m and 5m all price at $0.00599 / 5.3558 MB. A
@@ -71,14 +93,59 @@ def build_candidates(windows: str) -> list[tuple[str, str, str]]:
     return out
 
 
-def build_query(start: str, end: str) -> dict[str, object]:
+def build_query(start: str, end: str, symbol: str = SYMBOL) -> dict[str, object]:
     return {
         "dataset": DATASET,
-        "symbols": [SYMBOL],
+        "symbols": [symbol],
         "schema": "mbo",
         "start": start,
         "end": end,
     }
+
+
+def survey(client, budget_usd: float) -> int:
+    """Price the whole eventual experiment. Free, and downloads nothing.
+
+    Knowing what the real run costs before committing to a probe is the
+    difference between a budget and a hope.
+    """
+    print(f"pricing {len(SURVEY_SYMBOLS)} symbols x {len(SURVEY_DAYS)} sessions")
+    print("regular trading hours, MBO, nothing downloaded\n")
+    print(f"  {'symbol':<8}{'regime':<28}{'per session':>13}{'x' + str(len(SURVEY_DAYS)):>10}")
+
+    total = 0.0
+    failures = []
+    for symbol, regime in SURVEY_SYMBOLS:
+        per_day = []
+        for day in SURVEY_DAYS:
+            try:
+                estimate = estimate_cost(
+                    client, **build_query(day + SURVEY_WINDOW[0], day + SURVEY_WINDOW[1], symbol)
+                )
+                per_day.append(estimate.usd)
+            except Exception as exc:  # report and continue; one bad day must not abort
+                failures.append(f"{symbol} {day}: {type(exc).__name__}: {exc}")
+        if not per_day:
+            print(f"  {symbol:<8}{regime:<28}{'unpriced':>13}")
+            continue
+        subtotal = sum(per_day)
+        total += subtotal
+        one = "$" + format(per_day[0], ".4f")
+        many = "$" + format(subtotal, ".4f")
+        print(f"  {symbol:<8}{regime:<28}{one:>13}{many:>10}")
+
+    print(f"\n  {'TOTAL':<36}{'':>13}{'$' + format(total, '.4f'):>10}")
+    print(f"  {'against free credit':<36}{'':>13}{'$' + format(budget_usd, '.2f'):>10}")
+    if total > budget_usd:
+        print(f"\n  OVER BUDGET by ${total - budget_usd:.4f}. Cut symbols or sessions.")
+    else:
+        print(
+            f"\n  fits, with ${budget_usd - total:.4f} left over "
+            f"({100 * total / budget_usd:.1f}% of the credit)"
+        )
+    for line in failures:
+        print(f"  ! {line}")
+    return 0
 
 
 def preflight(client, candidates) -> list[CostEstimate]:
@@ -163,6 +230,17 @@ def main() -> int:
         help="comma-separated durations to price, e.g. 10s,1m,1h",
     )
     parser.add_argument(
+        "--survey",
+        action="store_true",
+        help="price the full experiment (symbols x sessions) instead of probe windows",
+    )
+    parser.add_argument(
+        "--credit",
+        type=float,
+        default=125.0,
+        help="free credit available, for the survey total to be compared against",
+    )
+    parser.add_argument(
         "--pick",
         default=None,
         help="download this window instead of the cheapest; same price at the floor",
@@ -174,6 +252,9 @@ def main() -> int:
     except RuntimeError as exc:
         print(f"{exc}\n\nSet it first:  export DATABENTO_API_KEY=...")
         return 2
+
+    if args.survey:
+        return survey(client, args.credit)
 
     candidates = build_candidates(args.windows)
     estimates = preflight(client, candidates)
