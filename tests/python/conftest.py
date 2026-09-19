@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 LOBSTER_DIR = Path(os.environ.get("SHADOWFILL_LOBSTER_DIR", "data/lobster"))
+ITCH_DIR = Path(os.environ.get("SHADOWFILL_ITCH_DIR", "data/itch"))
 
 # test_cpp_equivalence.py guards itself with importorskip, which is right for a
 # local pure-Python checkout but wrong for CI: a wheel built without the
@@ -25,3 +26,14 @@ def lobster_pair():
     if not orderbook_path.exists():
         pytest.skip(f"missing matching orderbook file for {message_path.name}")
     return message_path, orderbook_path, 10
+
+
+@pytest.fixture(scope="session")
+def itch_sample():
+    """Path to a Nasdaq ITCH sample, or skip."""
+    samples = list(ITCH_DIR.glob("*.gz")) + list(ITCH_DIR.glob("*.itch"))
+    if not samples:
+        pytest.skip(f"no ITCH sample in {ITCH_DIR}; run scripts/fetch_itch_sample.sh")
+    # Largest by bytes, not by name: a 2 MB and a 20 MB prefix of the same day
+    # sort the wrong way round, and the short one covers too little to validate.
+    return max(samples, key=lambda p: p.stat().st_size)

@@ -21,10 +21,23 @@ of it throughout its life.
 
 ## Using real data
 
+Nasdaq publishes complete TotalView-ITCH 5.0 trading days with no account, no
+key and no charge, and the server honours HTTP range requests, so a prefix is
+enough to validate the adapter without pulling 3.5 GB:
+
+    ./scripts/fetch_itch_sample.sh 20
+    pytest -m needs_itch -v
+
+ITCH is the raw feed LOBSTER is itself derived from. Its `Order Executed`
+message names the resting order reference that was consumed, which is what lets
+queue position be computed rather than inferred; on a 20 MB sample, 1,569 of
+1,569 executions resolved to a live order. The LOBSTER path still works if you
+have a sample:
+
     ./scripts/fetch_lobster_sample.sh data/lobster
     SHADOWFILL_LOBSTER_DIR=data/lobster pytest -m needs_lobster -v
 
-LOBSTER sample files are not redistributed here.
+Neither vendor's files are redistributed here, and CI touches neither.
 
 ## What the output means
 
@@ -97,6 +110,19 @@ monotonically through a long run and the process is non-stationary. It exists
 so CI never depends on third-party data and so the censoring mechanism is known
 by construction. It is not evidence about real markets, and no claim in this
 repository rests on it.
+
+**Book reconstruction from ITCH is validated less strongly than from
+LOBSTER.** LOBSTER ships an orderbook file alongside its messages — a third
+party's reconstruction of the same session — so the book could be checked row
+by row against one this project did not build. Raw ITCH has no such file, and
+cannot: ITCH is the input that file is derived from, so any book built from it
+is our own reconstruction and comparing it to itself proves nothing. What the
+ITCH path checks instead is internal consistency — the book never crosses, all
+1,569 executions resolve to a live order, no removal exceeds the shares
+resting — measured, but necessary rather than sufficient. Level aggregation
+below the best price is not checked against an outside observer at all. The
+free LOBSTER sample is no longer published, so this is a limitation of what is
+obtainable, not a choice; `docs/PLAN-AMENDMENTS.md` §V.1 records it in full.
 
 **Nothing here is a trading strategy.** This is a measurement instrument. It
 reports whether a hypothetical passive order would have filled and when. It

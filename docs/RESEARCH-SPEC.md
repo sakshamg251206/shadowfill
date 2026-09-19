@@ -107,9 +107,10 @@ exactly that.**
 
 | Source | Role | Notes |
 |---|---|---|
-| LOBSTER free sample (NASDAQ) | equities regime, adapter validation | message file carries order IDs; orderbook file gives an independent snapshot to validate reconstruction against |
+| ~~LOBSTER free sample (NASDAQ)~~ | ~~equities regime, adapter validation~~ | **Externally blocked.** The free sample is gone from the current site; the orderbook file was the only independent reconstruction available to validate against, and amendment V.1 records exactly what that costs |
 | ~~Self-recorded Coinbase L3~~ | ~~scale + out-of-venue generalisation~~ | **Unavailable — see amendment U.** `level3` exists only on Coinbase Exchange, which is gated behind a business application. Advanced Trade, which an individual can reach, publishes no L3 at all. |
-| Databento MBO (free credit) | **primary second source** | per-order IDs with an explicit Add/Cancel/Modify/Trade/Fill action, so fill-versus-cancel is observed rather than inferred |
+| Nasdaq TotalView-ITCH 5.0 (public daily files) | **primary second source** | free and account-free; `Order Executed` names the resting order reference that was consumed, verified on real bytes at 1,569/1,569 — see amendment V |
+| ~~Databento MBO (free credit)~~ | ~~primary second source~~ | **Optional.** Equivalent data, but downloads return `402` while pay-as-you-go is disabled, and ITCH answers the same question for nothing |
 | Synthetic generator (in repo) | CI, and the placebo test | censoring independent by construction |
 
 H2 needs contrasting tick regimes. With the crypto venue gone, these come from

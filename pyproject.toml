@@ -41,7 +41,10 @@ SHADOWFILL_BUILD_CORE = "ON"
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]
 addopts = "-ra --strict-markers"
-markers = ["needs_lobster: requires the manually downloaded LOBSTER sample"]
+markers = [
+    "needs_lobster: requires the manually downloaded LOBSTER sample",
+    "needs_itch: requires a Nasdaq ITCH sample fetched by scripts/fetch_itch_sample.sh",
+]
 
 [tool.ruff]
 line-length = 100

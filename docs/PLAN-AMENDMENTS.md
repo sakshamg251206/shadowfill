@@ -511,3 +511,132 @@ justified Plan 2a no longer applies.
 against a finite free credit. The symbol and date budget has to be decided
 before downloading rather than discovered afterwards, which makes it a design
 question for the next plan rather than an implementation detail.
+
+### V. Plan 2's source is Nasdaq TotalView-ITCH, not Databento (Plan 2b)
+
+**Original:** amendment U redirected Plan 2 to Databento MBO on the free signup
+credit, with one question to settle first: does an execution identify *which*
+resting order was consumed? Without that, queue position is inferred rather
+than computed, and the project has no ground truth.
+
+**What happened:** the question was answered, but not by Databento. Pricing
+probes were free and worked (the smallest useful MBO window costs $0.00599),
+yet every download returned `402 account_insufficient_funds` against a $125
+credit balance, because pay-as-you-go is disabled on the account and the credit
+cannot be drawn without a payment method on file. Nothing was spent. The
+question stayed open and the budget constraint stayed absolute.
+
+**Changed:** Nasdaq publishes complete TotalView-ITCH 5.0 daily files at
+`emi.nasdaq.com/ITCH/Nasdaq ITCH/` with no account, no key and no charge, and
+the server honours HTTP `Range`, so a prefix can be taken without downloading
+3.5 GB. ITCH is the feed LOBSTER is itself derived from. Plan 2's external
+ground-truth source is now ITCH; Databento is optional rather than blocking.
+
+**The question, answered on real bytes rather than documentation.** From a
+20 MB prefix of `12302019` (51.3 MB raw, 1,760,873 messages):
+
+| check | result |
+|---|---|
+| `E` executions resolving to a live resting order | **1,569 / 1,569 (100.00%)** |
+| executed shares ≤ the resting order's remaining shares | 1,485 / 1,485 |
+| message lengths against the spec (12 types) | all exact |
+
+The first pass showed 84 unresolved. The cause was `U` (Order Replace), which
+retires one order reference and issues another; with replaces tracked, the gap
+closed completely. `U` is 78,578 messages against 612,389 adds — roughly 11% of
+order flow, so this is not an edge case. It is emitted as **DELETE + ADD**,
+because the exchange treats a replace as a fresh arrival: modelling it as an
+amendment would wrongly preserve queue priority and inflate every fill rate
+computed behind it.
+
+**Architecture: an adapter, not a second book.** Only `A`/`F` carry a symbol, a
+side and a price. `E`, `C`, `X`, `D` and `U` carry an order reference and
+nothing else, and `D` carries no size either. A canonical event needs all of
+those fields, so `python/shadowfill/itch.py` keeps one table:
+
+    order_ref -> (side, price, remaining shares)
+
+This is deliberately not a book. It has no price levels, no aggregation, no
+best bid or ask and no priority logic; it undoes the feed's compression and
+stops there. All book and queue reasoning stays in `replay.py` and the C++
+engine, which continue to see only canonical events. Prices carry four implied
+decimals and timestamps are nanoseconds since midnight, so both map to the
+canonical schema without a conversion that could round.
+
+References that were live before the recording window are unresolvable: their
+side and price were set by an `A` the window never contained. Those events are
+**dropped and counted** in `ItchDiagnostics.unresolved_refs`, not guessed. The
+LOBSTER adapter can fall back on the event's own price and side fields here;
+ITCH has neither, and a guessed side would corrupt every queue position behind
+it.
+
+**What a prefix does and does not buy.** 20 MB reaches 05:56 ET — pre-market
+only, 1,569 executions across 8,906 symbols. Enough to validate a parser,
+far too thin for queue statistics. Regular-hours data requires the whole file,
+because a gzip member cannot be seeked into. A prefix also ends mid-message and
+mid-gzip-member, so `parse_itch(..., allow_truncated=True)` is opt-in and sets
+`diag.truncated`; tolerating truncation by default would make a failed download
+indistinguishable from a short session.
+
+**Not mapped.** `H` (stock trading action) is skipped, so the canonical `HALT`
+type is currently unreachable from ITCH; so are `Y`, `L`, `V`, `W`, `K`, `I`,
+`N` and `B`. Every skipped type is counted by code in
+`ItchDiagnostics.skipped_types` rather than silently ignored, and an
+unrecognised type is stepped over by its declared length so framing cannot
+desynchronise.
+
+### V.1 What Plan 1's LOBSTER validation cannot be reproduced on ITCH
+
+This is the honest cost of the source change, recorded because a reader who
+discovers it is worse than a reader who was told.
+
+**Lost: validation against an independent reconstruction.** LOBSTER ships two
+files per session — a message file and an *orderbook* file — and the orderbook
+file is a third party's reconstruction of the same session. That is what makes
+`test_reconstructed_top_of_book_matches_lobster_snapshots` meaningful: it
+compares our book, row by row, against a book we did not build. Raw ITCH has no
+such file and never will, because ITCH is the *input* LOBSTER derives its
+orderbook from. Any book built from ITCH is our own reconstruction, and
+comparing it to itself proves nothing. **There is no way to recover this check
+from raw ITCH.** It remains available only through the LOBSTER sample, which is
+now behind a university subscription or per-use payment, so it is externally
+blocked rather than deleted: the test still exists, still carries the
+`needs_lobster` marker, and will run unchanged if a sample ever becomes
+reachable.
+
+**Lost: per-row agreement at depth.** The LOBSTER orderbook file gives ten
+levels of price and size after every message, so level aggregation is validated
+well below the best price. Nothing in the ITCH path checks aggregate size at
+level 5. Book depth is therefore validated by construction and by the unit
+tests, not against an outside observer.
+
+**Also lost: row-comparability.** LOBSTER pre-processes — it filters to the
+requested level band and to one ticker. ITCH is raw. The two are not
+row-comparable even for the same ticker on the same day, so the ITCH path
+cannot be cross-checked against a LOBSTER session either.
+
+**Kept, and what it is worth.** `tests/python/test_itch_vs_nasdaq.py` runs
+against a real sample under the `needs_itch` marker:
+
+- *The book never crosses.* Every event replays through `RefBook`, and a bid
+  resting at or above an ask is checked for after each one. A wrong side byte,
+  a wrong price offset or a mishandled replace would all produce a crossed
+  book. Measured: 0 crossings in 75,854 events for UN, 0 for SAP, 0 for RIO.
+  This is a *necessary* condition, not the sufficient one the LOBSTER snapshot
+  gives.
+- *Every order reference resolves.* `unresolved_refs` and
+  `unknown_order_events` are both 0 on the sample, which constrains the decode
+  far more tightly than a rate threshold would.
+- *No oversized removals.* A cancel or execution for more shares than the
+  reference still held would indicate a lost or duplicated message; there were
+  none.
+
+All three are internal-consistency checks. They can catch a decoding error;
+they cannot catch an error that a correct-looking book would also make. That is
+a genuine weakening of Plan 1's validation and is stated as such in the README
+rather than left for a reader to find.
+
+**Offline coverage is unaffected.** `tests/python/test_itch.py` builds every
+message type byte by byte from the published layouts, so the offsets themselves
+are pinned by tests that need no sample, no network and no vendor — which is
+what invariant 6 requires of CI.
