@@ -32,7 +32,7 @@ from .bias import (
 )
 from .ground_truth import compute_outcomes, load_messages
 from .lifetimes import extract_lifetimes
-from .placements import place_top_of_book_grid
+from .placements import place_matched_to_orders, place_top_of_book_grid
 from .provenance import environment, git_sha, sha256_file
 
 #: US equities regular trading hours, as ns since midnight. Pre- and post-market
@@ -62,6 +62,7 @@ def run_h1(
     seed: int = 0,
     ahead_edges: Sequence[int] = DEFAULT_AHEAD_EDGES,
     window_ns: tuple[int, int] | None = REGULAR_HOURS_NS,
+    placement: str = "matched",
 ) -> dict[str, Any]:
     """Measure H1 on one session and write h1_curves.parquet + manifest.json."""
     message_path = Path(message_path)
@@ -78,9 +79,22 @@ def run_h1(
     if len(events) == 0:
         raise ValueError(f"{message_path} has no events in window {window_ns}")
 
-    placements = place_top_of_book_grid(
-        events, grid_ns=grid_ns, size=size, horizon_ns=horizon_ns, latency_ns=latency_ns
-    )
+    if placement == "matched":
+        # One shadow per real order, at that order's own time, price and side.
+        # The populations are then identical by construction and the only
+        # difference is that the shadow never cancels, which is the only way
+        # the measured gap is a cancellation bias rather than a composition
+        # difference. See the placebo note in the README.
+        placements = place_matched_to_orders(events, horizon_ns=horizon_ns, latency_ns=latency_ns)
+        at_touch_only = False
+    elif placement == "grid":
+        placements = place_top_of_book_grid(
+            events, grid_ns=grid_ns, size=size, horizon_ns=horizon_ns, latency_ns=latency_ns
+        )
+    else:
+        raise ValueError(f"unknown placement: {placement!r}")
+    if not placements:
+        raise ValueError("no placements were produced")
     columns, diagnostics = compute_outcomes(events, placements, engine)
     lives = extract_lifetimes(events)
     end_ts = int(events["ts_ns"][-1])
@@ -158,6 +172,7 @@ def run_h1(
             "latency_ns": latency_ns,
             "horizons_ns": [int(h) for h in horizons],
             "at_touch_only": at_touch_only,
+            "placement": placement,
             "block_ns": block_ns,
             "n_replicates": int(interval["n_replicates"]),
             "n_blocks": int(interval["n_blocks"]),
@@ -232,6 +247,13 @@ def main() -> None:
         "--no-window", action="store_true", help="use the whole session, including pre-market"
     )
     parser.add_argument(
+        "--placement",
+        choices=["matched", "grid"],
+        default="matched",
+        help="matched: one shadow per real order (the valid comparison). "
+        "grid: one per side on a time grid, which is not population-matched",
+    )
+    parser.add_argument(
         "--all-depths",
         action="store_true",
         help="do not restrict real orders to the touch (not comparable with shadows)",
@@ -251,6 +273,7 @@ def main() -> None:
         n_replicates=args.n_replicates,
         seed=args.seed,
         window_ns=None if args.no_window else (args.window_ns[0], args.window_ns[1]),
+        placement=args.placement,
     )
     print(format_table(manifest["rows"]))
     print(

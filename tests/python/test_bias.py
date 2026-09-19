@@ -213,3 +213,31 @@ def test_too_few_blocks_is_refused_rather_than_silently_narrow():
             horizons=HORIZONS,
             block_ns=10**18,
         )
+
+
+def test_matched_shadows_see_exactly_the_queue_their_real_order_saw():
+    """The property that makes the matched comparison mean anything.
+
+    If a shadow's queue-ahead differed from its order's by even its own size,
+    the measured difference would be part bookkeeping. One nanosecond of offset
+    is what buys this: the shadow activates on the arriving ADD event, before
+    the book applies it.
+    """
+    from shadowfill.lifetimes import extract_lifetimes
+    from shadowfill.placements import place_matched_to_orders
+
+    events = generate_synthetic_messages(n_events=20_000, seed=41)
+    placements = place_matched_to_orders(events, horizon_ns=10 * SEC)
+    table = extract_lifetimes(events)
+    assert len(placements) == len(table)
+
+    settled, _ = replay_reference(events, placements)
+    by_id = {o.shadow_id: o for o in settled}
+    compared = 0
+    for i, row in enumerate(table):
+        outcome = by_id[i]
+        if outcome.status == int(Status.NOT_ACTIVATED):
+            continue
+        assert outcome.ahead_at_insert == int(row["ahead_at_arrival"]), f"order {i}"
+        compared += 1
+    assert compared > len(table) * 0.9
