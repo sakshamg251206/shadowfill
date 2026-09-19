@@ -40,16 +40,35 @@ from shadowfill.databento_cost import (
 # LOBSTER sample Plan 1 already validates against, so the two are comparable.
 DATASET = "XNAS.ITCH"
 
-# One liquid symbol on one ordinary trading day, at several window lengths. The
-# point of pricing more than one is to find where the bill stops shrinking:
-# if a minimum billable size exists, these will flatten out and the shortest
-# window buys nothing.
-CANDIDATES = [
-    ("10s", "2024-06-03T14:30:00", "2024-06-03T14:30:10"),
-    ("1m", "2024-06-03T14:30:00", "2024-06-03T14:31:00"),
-    ("5m", "2024-06-03T14:30:00", "2024-06-03T14:35:00"),
-]
 SYMBOL = "AAPL"
+START = "2024-06-03T14:30:00"
+DEFAULT_WINDOWS = "10s,1m,5m,15m,1h,4h"
+
+# Measured 2026-09-19: 10s, 1m and 5m all price at $0.00599 / 5.3558 MB. A
+# request that does not begin at UTC midnight has a synthetic snapshot of the
+# whole book prepended, and that snapshot dominates the bill, so below some
+# window length the duration is free. Pricing is itself free, so the sensible
+# move is to find where that floor ends rather than assume a window length.
+_UNITS = {"s": 1, "m": 60, "h": 3600}
+
+
+def parse_window(text: str) -> int:
+    """Seconds from a duration like '10s', '5m', '4h'."""
+    unit = text[-1]
+    if unit not in _UNITS or not text[:-1].isdigit():
+        raise ValueError(f"bad window {text!r}; use e.g. 30s, 5m, 2h")
+    return int(text[:-1]) * _UNITS[unit]
+
+
+def build_candidates(windows: str) -> list[tuple[str, str, str]]:
+    from datetime import datetime, timedelta
+
+    start = datetime.fromisoformat(START)
+    out = []
+    for label in [w.strip() for w in windows.split(",") if w.strip()]:
+        end = start + timedelta(seconds=parse_window(label))
+        out.append((label, START, end.isoformat()))
+    return out
 
 
 def build_query(start: str, end: str) -> dict[str, object]:
@@ -62,11 +81,11 @@ def build_query(start: str, end: str) -> dict[str, object]:
     }
 
 
-def preflight(client) -> list[CostEstimate]:
+def preflight(client, candidates) -> list[CostEstimate]:
     """Price every candidate. Free: Databento bills metadata endpoints at $0.00."""
     estimates = []
-    print(f"pricing {len(CANDIDATES)} candidate windows (free, nothing downloaded)\n")
-    for label, start, end in CANDIDATES:
+    print(f"pricing {len(candidates)} candidate windows (free, nothing downloaded)\n")
+    for label, start, end in candidates:
         estimate = estimate_cost(client, **build_query(start, end))
         estimates.append(estimate)
         print(f"  {label:>4}  ${estimate.usd:>9.5f}  {estimate.megabytes:>10.4f} MB")
@@ -138,6 +157,16 @@ def main() -> int:
         help="hard ceiling in USD; required with --download, never defaulted",
     )
     parser.add_argument("--out", type=Path, default=Path("data/databento/probe.dbn.zst"))
+    parser.add_argument(
+        "--windows",
+        default=DEFAULT_WINDOWS,
+        help="comma-separated durations to price, e.g. 10s,1m,1h",
+    )
+    parser.add_argument(
+        "--pick",
+        default=None,
+        help="download this window instead of the cheapest; same price at the floor",
+    )
     args = parser.parse_args()
 
     try:
@@ -146,9 +175,25 @@ def main() -> int:
         print(f"{exc}\n\nSet it first:  export DATABENTO_API_KEY=...")
         return 2
 
-    estimates = preflight(client)
+    candidates = build_candidates(args.windows)
+    estimates = preflight(client, candidates)
     best = cheapest(estimates)
-    print(f"\ncheapest: {best.describe()}")
+
+    # At the cost floor every window bills the same, so the cheapest is not the
+    # most useful -- take the longest window sharing that price, which buys more
+    # trades to validate against for no extra money.
+    at_floor = [e for e in estimates if e.usd == best.usd]
+    best = at_floor[-1] if at_floor else best
+    if args.pick:
+        chosen = [
+            e for e, (label, _, _) in zip(estimates, candidates, strict=True) if label == args.pick
+        ]
+        if not chosen:
+            print(f"\n--pick {args.pick} is not among --windows")
+            return 2
+        best = chosen[0]
+    print(f"\nselected: {best.describe()}")
+    print(f"({len(at_floor)} of {len(estimates)} windows share the floor price)")
 
     if not args.download:
         print("\npriced only; nothing downloaded. Re-run with --download --budget <usd>.")

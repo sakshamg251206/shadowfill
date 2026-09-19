@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 
 class BudgetExceededError(RuntimeError):
@@ -126,4 +126,10 @@ def client_from_env() -> HistoricalClient:
         raise RuntimeError("DATABENTO_API_KEY is not set in the environment")
     import databento
 
-    return databento.Historical(key)  # type: ignore[no-any-return]
+    # databento.Historical satisfies this protocol in substance but not
+    # nominally: its get_cost and get_range take explicit keyword parameters
+    # where the protocol declares **kwargs, which is a stricter real signature
+    # than the one declared here rather than an incompatible one. The cast is
+    # confined to this single construction point, so every other function in
+    # this module stays checked against the protocol.
+    return cast(HistoricalClient, databento.Historical(key))
