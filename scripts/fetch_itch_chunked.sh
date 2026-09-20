@@ -10,12 +10,19 @@
 # a reset costs one chunk instead of the whole transfer, and progress is always
 # whatever is already on disk.
 #
+# Chunk size is small on purpose. The server throttles to ~120 KB/s at times,
+# and a 32 MB chunk then needs ~286 s against a 300 s limit -- so chunks were
+# timing out just short of completion and their work was discarded. 8 MB
+# finishes in ~70 s at that rate, leaving room for the server to be slower
+# still. A connection delivering almost nothing is abandoned in 60 s rather
+# than held until the timeout.
+#
 # Usage:  ./scripts/fetch_itch_chunked.sh [FILE] [DEST] [CHUNK_MB]
 set -euo pipefail
 
 FILE="${1:-12302019.NASDAQ_ITCH50.gz}"
 DEST="${2:-data/itch}"
-CHUNK_MB="${3:-32}"
+CHUNK_MB="${3:-8}"
 URL="https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/${FILE}"
 OUT="${DEST}/${FILE}"
 
@@ -31,7 +38,8 @@ while :; do
     [ "$END" -ge "$TOTAL" ] && END=$(( TOTAL - 1 ))
     # Append only on success: a partial chunk written straight to $OUT would
     # corrupt the offset the next iteration computes from the file size.
-    if curl -fsS --http1.1 --max-time 300 -r "${HAVE}-${END}" "$URL" > /tmp/itch_chunk.$$; then
+    if curl -fsS --http1.1 --max-time 600 --speed-limit 5000 --speed-time 60 \
+        -r "${HAVE}-${END}" "$URL" > /tmp/itch_chunk.$$; then
         cat /tmp/itch_chunk.$$ >> "$OUT"
         printf '\r%d / %d MB' $(( (HAVE + CHUNK) / 1048576 )) $(( TOTAL / 1048576 ))
     else
