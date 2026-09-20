@@ -57,6 +57,50 @@ only. Reproduce it with:
 Every number above is in `results/h1-aapl-2019-12-30/manifest.json` with the
 git commit, input hash and full config that produced it.
 
+## The headline: error in expected passive edge (H3)
+
+A fill rate is not a decision. What a desk trades on is
+
+    E[edge] = F(h) x E[m_h | filled]
+
+the chance of being filled times what the fill was worth. Markout is signed so
+positive is profit to the passive side, and measured against the mid one second
+after the fill.
+
+| horizon | true edge | estimated edge | error | 95% CI |
+|---|---|---|---|---|
+| 100 ms | −0.001 | −0.001 | +0.001 | [−0.001, +0.002] |
+| 1 s | −0.012 | −0.008 | +0.005 | [−0.001, +0.008] |
+| 10 s | −0.072 | −0.024 | +0.049 | [+0.034, +0.059] |
+| 60 s | **−0.151** | **−0.038** | **+0.113** | [+0.083, +0.136] |
+
+All in basis points. Resting passively at AAPL's touch and never cancelling
+costs **0.151 bps** to adverse selection over a minute. An estimator fitted on
+the observable orders says **0.038 bps** — it understates the cost by a factor
+of four, and the interval excludes zero from 10 s onward.
+
+**H3's mechanism does not survive contact with the data.** The spec predicted
+the conditional markout would be biased in the opposite direction and partly
+offset the fill-rate error. Decomposed:
+
+| horizon | F* vs F̂ | m* vs m̂ |
+|---|---|---|
+| 10 s | 0.2268 vs 0.0789 | −0.318 vs −0.298 |
+| 60 s | 0.4203 vs 0.1027 | −0.359 vs −0.370 |
+
+The fill-rate gap is a factor of four; the markout gap is a few percent, and
+its sign is not even consistent across horizons — flattered at 10 s, slightly
+worse at 60 s. The offset the hypothesis relies on is not there. The whole
+error in expected edge is the fill-rate error, priced.
+
+That is a negative result for the mechanism and it is reported as one. It is
+also one window, and the offset could well appear in a regime where
+cancellation is more informed.
+
+    python -m shadowfill.markout \
+        --message-path data/parquet/date=2019-12-30/symbol=AAPL/events.parquet \
+        --out-dir results/h3-edge-aapl-2019-12-30 --block-ns 300000000000
+
 ## What a level-2 feed costs (H4)
 
 Every open-source queue-aware backtester runs on level-2 data, which reports

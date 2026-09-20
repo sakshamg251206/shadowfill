@@ -94,7 +94,7 @@ class _Life:
 assert tuple(f.name for f in fields(_Life)) == LIFETIME_DTYPE.names
 
 
-class _TouchIndex:
+class TouchIndex:
     """Best price per side, maintained beside the book rather than inside it.
 
     ``RefBook.best_bid`` is a linear scan on purpose -- it is the oracle and
@@ -142,7 +142,7 @@ def extract_lifetimes(events: np.ndarray) -> np.ndarray:
     ``unknown_order_events`` instead of inventing a queue position for them.
     """
     book = RefBook()
-    touch = _TouchIndex(book)
+    touch = TouchIndex(book)
 
     lives: list[_Life] = []
     index: dict[int, _Life] = {}

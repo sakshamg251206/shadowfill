@@ -179,6 +179,6 @@ Each of these can kill a claim, which is the point.
 |---|---|
 | H1 — the bias exists and is material | measured on one session; all intervals exclude zero |
 | H2 — the sign is regime-dependent | the one session's sign is opposite to the spec's leading story (amendment X.1); untested across regimes |
-| H3 — adverse selection offsets it | not built. Needs markouts, and it carries the headline number in basis points |
+| H3 — adverse selection offsets it | measured on one session. The bps number exists; the *offset* the hypothesis rests on does not appear — the markout bias is a few percent against a fill-rate gap of four times, so the edge error is the fill-rate error priced |
 | H4 — the L2 penalty | measured on one session, for the cancel-from-front heuristic only |
 | H5 — decision relevance | not built |
