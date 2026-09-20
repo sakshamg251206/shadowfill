@@ -177,8 +177,8 @@ Each of these can kill a claim, which is the point.
 
 | | state |
 |---|---|
-| H1 — the bias exists and is material | measured on one session; all intervals exclude zero |
-| H2 — the sign is regime-dependent | **not supported** on one session. Five symbols spanning 0.35–2.10 bps of relative tick all understate; no sign flip and no monotone magnitude. The range may be too narrow for the regimes intended |
-| H3 — adverse selection offsets it | measured on one session. The bps number exists; the *offset* the hypothesis rests on does not appear — the markout bias is a few percent against a fill-rate gap of four times, so the edge error is the fill-rate error priced |
+| H1 — the bias exists and is material | **supported** on one full session (AAPL, 791,477 matched orders). KM understates the 60s fill rate by 0.269, CI [−0.293, −0.225] |
+| H2 — the sign is regime-dependent | **not supported**. The sign *does* flip (SAP, +0.081, interval excludes zero) but not along the tick axis: SAP sits mid-range at 0.75 bps between two negatives. The distinguishing feature is cross-listing, not tick size |
+| H3 — adverse selection offsets it | **mechanism not supported**. The bps number exists (+0.056 bps error at 60s); the offset does not — markout gap 5% against a fill-rate gap of 2.6x, so the edge error is the fill-rate error priced |
 | H4 — the L2 penalty | measured on one session, for the cancel-from-front heuristic only |
-| H5 — decision relevance | measured on one session. Rankings do **not** invert (0/10 pairs), so the literal claim fails; but the estimator understates the spread between best and worst policy fivefold and the two disagree on the best policy in 38.7% of bootstrap replicates |
+| H5 — decision relevance | **not supported**. Rankings do not invert (0/10 pairs) and the two methods agree on the best policy in 100% of bootstrap replicates. The estimator understates what the choice is worth by 2.8x, but would not lead a desk to a different policy |

@@ -1,11 +1,11 @@
 {
-  "git_sha": "1f4f920ad0095620b8da08daf958f7e553425386",
+  "git_sha": "a783a3ba865a048a508b7ed002ba5cc0e8bfdd68",
   "experiment": "H5-decision-relevance",
   "input_path": "data/parquet/date=2019-12-30/symbol=AAPL/events.parquet",
   "input_format": "parquet",
-  "input_sha256": "17ef74f2d57a858106505749db65474ba6c789e6ad4ff055ec989d31c514bcef",
-  "n_events": 346841,
-  "n_placements": 180934,
+  "input_sha256": "302d1302390e18f09ff8b9cba28ac26dc57e83444cbbaaa52114c25c4e3bec1a",
+  "n_events": 1581219,
+  "n_placements": 791477,
   "environment": {
     "python": "3.11.13",
     "platform": "macOS-26.6.2-arm64-arm-64bit",
@@ -15,19 +15,19 @@
     "compiler": "clang 21.0.0 (clang-2100.1.1.101)"
   },
   "diagnostics": {
-    "unknown_order_assumed_ahead": 432,
-    "fifo_violations": 412,
-    "unknown_order_events": 230
+    "unknown_order_assumed_ahead": 530,
+    "fifo_violations": 686,
+    "unknown_order_events": 380
   },
-  "cross_cost_bps": 0.6931688212664194,
+  "cross_cost_bps": 0.5147298526156855,
   "inversion_rate": 0.0,
   "inverted_pairs": 0,
   "pairs": 10,
   "inversion_rate_lo": 0.0,
-  "inversion_rate_hi": 0.4,
+  "inversion_rate_hi": 0.0,
   "best_policy_true_ns": 60000000000,
   "best_policy_estimated_ns": 60000000000,
-  "best_policy_disagreement_rate": 0.38666666666666666,
+  "best_policy_disagreement_rate": 0.0,
   "config": {
     "horizon_ns": 60000000000,
     "markout_ns": 1000000000,
@@ -42,57 +42,57 @@
       34200000000000,
       57600000000000
     ],
-    "block_ns": 300000000000,
-    "n_replicates": 150,
-    "n_blocks": 8,
+    "block_ns": 1800000000000,
+    "n_replicates": 200,
+    "n_blocks": 13,
     "seed": 0,
     "engine": "cpp"
   },
   "rows": [
     {
       "wait_ns": 100000000,
-      "true_fill_rate": 0.019023754686390393,
-      "true_markout_bps": -0.06806452858443514,
-      "true_edge_bps": -0.6812769905490278,
-      "est_fill_rate": 0.014729875140408799,
-      "est_markout_bps": -0.04983877328426593,
-      "est_edge_bps": -0.6836926499855691
+      "true_fill_rate": 0.017162892189197088,
+      "true_markout_bps": -0.01408929922412092,
+      "true_edge_bps": -0.5061374127722861,
+      "est_fill_rate": 0.014047626703156624,
+      "est_markout_bps": -0.011910478901428073,
+      "est_edge_bps": -0.5076664337546326
     },
     {
       "wait_ns": 1000000000,
-      "true_fill_rate": 0.06064367085111422,
-      "true_markout_bps": -0.20032812823105647,
-      "true_edge_bps": -0.6632811524959478,
-      "est_fill_rate": 0.03917744258326317,
-      "est_markout_bps": -0.19359859652831432,
-      "est_edge_bps": -0.6735969374704345
+      "true_fill_rate": 0.050648404548098935,
+      "true_markout_bps": -0.10095434815982125,
+      "true_edge_bps": -0.4937727834739112,
+      "est_fill_rate": 0.037233715677707946,
+      "est_markout_bps": -0.10714649467330142,
+      "est_edge_bps": -0.49955400975109326
     },
     {
       "wait_ns": 5000000000,
-      "true_fill_rate": 0.15993844629596332,
-      "true_markout_bps": -0.2847686969550912,
-      "true_edge_bps": -0.6278499399169873,
-      "est_fill_rate": 0.06758789269998633,
-      "est_markout_bps": -0.2783898746272849,
-      "est_edge_bps": -0.6651347863267602
+      "true_fill_rate": 0.13961519901296815,
+      "true_markout_bps": -0.1726291106026745,
+      "true_edge_bps": -0.4669673894370549,
+      "est_fill_rate": 0.08295183113236526,
+      "est_markout_bps": -0.1730746667298682,
+      "est_edge_bps": -0.48638892933058836
     },
     {
       "wait_ns": 30000000000,
-      "true_fill_rate": 0.3462147769483941,
-      "true_markout_bps": -0.3281495796942172,
-      "true_edge_bps": -0.5667937659636274,
-      "est_fill_rate": 0.0940906619674865,
-      "est_markout_bps": -0.34121873226059407,
-      "est_edge_bps": -0.6600536044123456
+      "true_fill_rate": 0.338243016047618,
+      "true_markout_bps": -0.191398660571953,
+      "true_edge_bps": -0.4053653350365418,
+      "est_fill_rate": 0.14205976216975968,
+      "est_markout_bps": -0.18781259290729987,
+      "est_edge_bps": -0.4682880644523227
     },
     {
       "wait_ns": 60000000000,
-      "true_fill_rate": 0.4202581466051939,
-      "true_markout_bps": -0.35888623283165627,
-      "true_edge_bps": -0.5526838402084391,
-      "est_fill_rate": 0.10269495660326455,
-      "est_markout_bps": -0.37007780563838,
-      "est_edge_bps": -0.6599890034375933
+      "true_fill_rate": 0.4331310226928433,
+      "true_markout_bps": -0.20045792672715798,
+      "true_edge_bps": -0.3786089319519381,
+      "est_fill_rate": 0.16436573882041094,
+      "est_markout_bps": -0.19005270373687916,
+      "est_edge_bps": -0.46136405316211593
     }
   ]
 }
