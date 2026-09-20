@@ -39,8 +39,11 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements-dev.lock
       - run: pip install -e ".[dev]"
-      # A shared runner is noisy, so this gate catches an order-of-magnitude
-      # regression, not a few percent. The engine is ~10x over the gate on
-      # developer hardware; if this starts failing, read the printed rate
-      # before assuming the runner was slow.
-      - run: make bench
+      # An absolute events/s gate assumes a machine, and a shared runner is
+      # not one: the engine clears 2M/s on developer hardware and lands near
+      # 1.4M/s here for no reason of its own. bench-ci instead times the
+      # pure-Python reference engine on the same slice in the same run and
+      # gates on the ratio, which is an order-of-magnitude check that no
+      # runner speed can move. The absolute rate is still printed above it.
+      # The strict absolute gate lives in `make bench`, run locally.
+      - run: make bench-ci

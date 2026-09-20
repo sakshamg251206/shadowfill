@@ -1,4 +1,4 @@
-.PHONY: install test test-cpp lint bench placebo reproduce clean
+.PHONY: install test test-cpp lint bench bench-ci placebo reproduce clean
 
 install:
 	pip install -e ".[dev]"
@@ -18,6 +18,9 @@ lint:
 
 bench:
 	python benchmarks/bench_replay.py
+
+bench-ci:
+	python benchmarks/bench_replay.py --ci
 
 placebo:
 	pytest tests/python/test_placebo.py -v
