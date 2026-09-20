@@ -57,6 +57,47 @@ only. Reproduce it with:
 Every number above is in `results/h1-aapl-2019-12-30/manifest.json` with the
 git commit, input hash and full config that produced it.
 
+## Does the sign depend on the tick regime? (H2: no)
+
+The spec predicted the bias would read high in small-relative-tick, thin-queue
+books and low in large-relative-tick, deep ones. The contrast is taken within
+one venue and one session, from relative tick size, so the matching rules are
+held constant: a $287 stock and a $47 stock share a $0.01 tick and differ
+sixfold in what that tick is worth.
+
+Naive Kaplan–Meier error at a 60-second horizon, ordered by regime:
+
+| symbol | price | tick (bps) | F* | KM | error | 95% CI |
+|---|---|---|---|---|---|---|
+| AAPL | 287.02 | 0.35 | 0.4203 | 0.1027 | −0.3176 | [−0.3257, −0.2613] |
+| MSFT | 157.36 | 0.64 | 0.4986 | 0.1177 | −0.3809 | [−0.4127, −0.2902] |
+| INTC | 59.56 | 1.68 | 0.5215 | 0.1182 | −0.4033 | [−0.4258, −0.3396] |
+| UN | 58.02 | 1.72 | 0.1298 | 0.0407 | −0.0891 | [−0.1289, −0.0595] |
+| CSCO | 47.53 | 2.10 | 0.4034 | 0.0706 | −0.3328 | [−0.3728, −0.2364] |
+
+**The sign never flips.** Every symbol understates, across a sixfold range of
+relative tick, and the magnitude is not monotone in the regime either. H2 as
+stated is not supported by this session.
+
+UN is the outlier and has an explanation rather than an excuse: it is a
+NYSE-listed ADR, so the Nasdaq book is a small slice of its real liquidity.
+Its ground-truth fill rate is 0.13 against 0.40–0.52 for the others, which is
+the same fact seen from the other side.
+
+SAP is excluded by a 50,000-event floor — 8,131 in-window events, because its
+liquidity is in European hours. A regime point built on a few hundred orders
+is worse than no point.
+
+**What would change this verdict.** One session, 46 minutes, five large-cap
+names spanning 0.35–2.10 bps. That range may simply be too narrow to contain
+the regimes the hypothesis is about, and the opening hour is when cancellation
+behaviour is least typical. The honest statement is that the predicted sign
+flip does not appear here, not that it does not exist.
+
+    python -m shadowfill.regimes --session-date 2019-12-30 \
+        --symbols AAPL,MSFT,SAP,INTC,UN,CSCO \
+        --out-dir results/h2-regimes-2019-12-30 --block-ns 300000000000
+
 ## The headline: error in expected passive edge (H3)
 
 A fill rate is not a decision. What a desk trades on is

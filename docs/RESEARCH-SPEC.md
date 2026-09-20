@@ -178,7 +178,7 @@ Each of these can kill a claim, which is the point.
 | | state |
 |---|---|
 | H1 — the bias exists and is material | measured on one session; all intervals exclude zero |
-| H2 — the sign is regime-dependent | the one session's sign is opposite to the spec's leading story (amendment X.1); untested across regimes |
+| H2 — the sign is regime-dependent | **not supported** on one session. Five symbols spanning 0.35–2.10 bps of relative tick all understate; no sign flip and no monotone magnitude. The range may be too narrow for the regimes intended |
 | H3 — adverse selection offsets it | measured on one session. The bps number exists; the *offset* the hypothesis rests on does not appear — the markout bias is a few percent against a fill-rate gap of four times, so the edge error is the fill-rate error priced |
 | H4 — the L2 penalty | measured on one session, for the cancel-from-front heuristic only |
 | H5 — decision relevance | not built |
