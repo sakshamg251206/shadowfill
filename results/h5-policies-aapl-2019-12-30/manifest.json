@@ -1,0 +1,98 @@
+{
+  "git_sha": "1f4f920ad0095620b8da08daf958f7e553425386",
+  "experiment": "H5-decision-relevance",
+  "input_path": "data/parquet/date=2019-12-30/symbol=AAPL/events.parquet",
+  "input_format": "parquet",
+  "input_sha256": "17ef74f2d57a858106505749db65474ba6c789e6ad4ff055ec989d31c514bcef",
+  "n_events": 346841,
+  "n_placements": 180934,
+  "environment": {
+    "python": "3.11.13",
+    "platform": "macOS-26.6.2-arm64-arm-64bit",
+    "numpy": "2.4.6",
+    "pandas": "3.0.6",
+    "pyarrow": "25.0.1",
+    "compiler": "clang 21.0.0 (clang-2100.1.1.101)"
+  },
+  "diagnostics": {
+    "unknown_order_assumed_ahead": 432,
+    "fifo_violations": 412,
+    "unknown_order_events": 230
+  },
+  "cross_cost_bps": 0.6931688212664194,
+  "inversion_rate": 0.0,
+  "inverted_pairs": 0,
+  "pairs": 10,
+  "inversion_rate_lo": 0.0,
+  "inversion_rate_hi": 0.4,
+  "best_policy_true_ns": 60000000000,
+  "best_policy_estimated_ns": 60000000000,
+  "best_policy_disagreement_rate": 0.38666666666666666,
+  "config": {
+    "horizon_ns": 60000000000,
+    "markout_ns": 1000000000,
+    "waits_ns": [
+      100000000,
+      1000000000,
+      5000000000,
+      30000000000,
+      60000000000
+    ],
+    "window_ns": [
+      34200000000000,
+      57600000000000
+    ],
+    "block_ns": 300000000000,
+    "n_replicates": 150,
+    "n_blocks": 8,
+    "seed": 0,
+    "engine": "cpp"
+  },
+  "rows": [
+    {
+      "wait_ns": 100000000,
+      "true_fill_rate": 0.019023754686390393,
+      "true_markout_bps": -0.06806452858443514,
+      "true_edge_bps": -0.6812769905490278,
+      "est_fill_rate": 0.014729875140408799,
+      "est_markout_bps": -0.04983877328426593,
+      "est_edge_bps": -0.6836926499855691
+    },
+    {
+      "wait_ns": 1000000000,
+      "true_fill_rate": 0.06064367085111422,
+      "true_markout_bps": -0.20032812823105647,
+      "true_edge_bps": -0.6632811524959478,
+      "est_fill_rate": 0.03917744258326317,
+      "est_markout_bps": -0.19359859652831432,
+      "est_edge_bps": -0.6735969374704345
+    },
+    {
+      "wait_ns": 5000000000,
+      "true_fill_rate": 0.15993844629596332,
+      "true_markout_bps": -0.2847686969550912,
+      "true_edge_bps": -0.6278499399169873,
+      "est_fill_rate": 0.06758789269998633,
+      "est_markout_bps": -0.2783898746272849,
+      "est_edge_bps": -0.6651347863267602
+    },
+    {
+      "wait_ns": 30000000000,
+      "true_fill_rate": 0.3462147769483941,
+      "true_markout_bps": -0.3281495796942172,
+      "true_edge_bps": -0.5667937659636274,
+      "est_fill_rate": 0.0940906619674865,
+      "est_markout_bps": -0.34121873226059407,
+      "est_edge_bps": -0.6600536044123456
+    },
+    {
+      "wait_ns": 60000000000,
+      "true_fill_rate": 0.4202581466051939,
+      "true_markout_bps": -0.35888623283165627,
+      "true_edge_bps": -0.5526838402084391,
+      "est_fill_rate": 0.10269495660326455,
+      "est_markout_bps": -0.37007780563838,
+      "est_edge_bps": -0.6599890034375933
+    }
+  ]
+}

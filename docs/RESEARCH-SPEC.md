@@ -181,4 +181,4 @@ Each of these can kill a claim, which is the point.
 | H2 — the sign is regime-dependent | **not supported** on one session. Five symbols spanning 0.35–2.10 bps of relative tick all understate; no sign flip and no monotone magnitude. The range may be too narrow for the regimes intended |
 | H3 — adverse selection offsets it | measured on one session. The bps number exists; the *offset* the hypothesis rests on does not appear — the markout bias is a few percent against a fill-rate gap of four times, so the edge error is the fill-rate error priced |
 | H4 — the L2 penalty | measured on one session, for the cancel-from-front heuristic only |
-| H5 — decision relevance | not built |
+| H5 — decision relevance | measured on one session. Rankings do **not** invert (0/10 pairs), so the literal claim fails; but the estimator understates the spread between best and worst policy fivefold and the two disagree on the best policy in 38.7% of bootstrap replicates |

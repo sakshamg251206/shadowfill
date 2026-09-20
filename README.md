@@ -57,6 +57,43 @@ only. Reproduce it with:
 Every number above is in `results/h1-aapl-2019-12-30/manifest.json` with the
 git commit, input hash and full config that produced it.
 
+## Does the correction change the decision? (H5)
+
+A bias can be real, large, and irrelevant. The test is whether acting on the
+uncorrected estimate leads anywhere different. The policy class is the choice
+an execution desk actually faces — rest passively at the touch for T, cross the
+spread if still unfilled — so waiting longer earns passive fills but suffers
+adverse selection, and waiting less pays the spread more often.
+
+| wait | F* | edge* (bps) | F̂ | edgê (bps) |
+|---|---|---|---|---|
+| 100 ms | 0.0190 | −0.6813 | 0.0147 | −0.6837 |
+| 1 s | 0.0606 | −0.6633 | 0.0392 | −0.6736 |
+| 5 s | 0.1599 | −0.6278 | 0.0676 | −0.6651 |
+| 30 s | 0.3462 | −0.5668 | 0.0941 | −0.6601 |
+| 60 s | 0.4203 | **−0.5527** | 0.1027 | **−0.6600** |
+
+Crossing immediately costs 0.693 bps. Both methods rank the policies
+identically — **0 of 10 pairs invert** — and both pick 60 s as best.
+
+**So H5's literal claim fails, and the interesting part is why.** The truth
+says the choice is worth **0.129 bps**, the spread between the worst and best
+policy. The estimator says it is worth **0.024 bps**. It understates what is at
+stake by a factor of five, and flattens a genuinely informative decision into
+something close to indifference — under bootstrap resampling the two methods
+pick different best policies in **38.7%** of replicates, precisely because the
+estimated curve is too flat to hold its ordering.
+
+The honest summary: the correction does not change *which* policy you choose
+here, it changes whether you can tell the policies apart at all. A desk reading
+the uncorrected numbers would conclude that patience is worth almost nothing
+and would have no basis to defend a choice between crossing at 100 ms and
+waiting a minute.
+
+    python -m shadowfill.policies \
+        --message-path data/parquet/date=2019-12-30/symbol=AAPL/events.parquet \
+        --out-dir results/h5-policies-aapl-2019-12-30 --block-ns 300000000000
+
 ## Does the sign depend on the tick regime? (H2: no)
 
 The spec predicted the bias would read high in small-relative-tick, thin-queue
