@@ -23,8 +23,34 @@ def generate_synthetic_messages(
     mid_start: int = 1_000_000,
     max_levels: int = 5,
     mean_size: int = 20,
+    informed_cancel: float = 0.0,
 ) -> np.ndarray:
-    """Generate a canonical event array from a seeded zero-intelligence process."""
+    """Generate a canonical event array from a seeded zero-intelligence process.
+
+    ``informed_cancel`` injects a cancellation mechanism with a *known* sign,
+    for Plan 4's known-bias injection test. It is 0 by default, which leaves
+    the stream byte-identical to the zero-intelligence process and keeps the
+    placebo's independent-censoring guarantee intact.
+
+    The two mechanisms RESEARCH-SPEC H2 says oppose each other:
+
+    ``informed_cancel > 0`` -- *picked-off avoidance*. With this probability a
+        cancel targets the front order at the best price, which is the order
+        most likely to trade next. Cancellation then removes fill-prone orders
+        from the risk set, so a censoring estimator sees survivors adversely
+        selected against filling and **understates** fill probability. The
+        measured error ``KM - truth`` must come out **negative**.
+
+    ``informed_cancel < 0`` -- *hopeless-queue cancellation*. With this
+        probability a cancel targets an order away from the best price, which
+        is unlikely to trade. Survivors are then enriched for fillable orders
+        and the estimator **overstates**. The error must come out **positive**.
+
+    The magnitude is not analytically known, so the injection test pins the
+    sign and the monotonicity in strength rather than a closed-form number.
+    """
+    if not -1.0 <= informed_cancel <= 1.0:
+        raise ValueError(f"informed_cancel must lie in [-1, 1], got {informed_cancel}")
     rng = np.random.default_rng(seed)
     events = empty_events(n_events)
 
@@ -87,6 +113,37 @@ def generate_synthetic_messages(
             heaped[side].discard(price)
         return None
 
+    def _back(side: int, price: int) -> int | None:
+        """Newest still-resting order at this price, purging cancelled ids."""
+        q = level_q[side].get(price)
+        if q is None:
+            return None
+        while q and q[-1] not in resting:
+            q.pop()
+        return q[-1] if q else None
+
+    def _informed_target(side: int, pick_off: bool, fallback: int) -> int:
+        """Choose a cancel target with a known relationship to fill prospects.
+
+        Both arms act at the *best* price, so the only thing that differs is
+        queue position. Targeting deep price levels instead was tried first and
+        measured no bias at all: an order five levels down does not fill inside
+        the horizon whether or not anyone cancels it, so removing it moves
+        neither curve. Queue position at the touch is where fill prospects
+        actually live.
+
+        ``pick_off`` targets the front -- the order about to trade. Otherwise
+        targets the back -- the order with the whole queue ahead of it. Falls
+        back to the uniform draw whenever the level is empty, so the injection
+        weakens toward the zero-intelligence process rather than distorting the
+        book.
+        """
+        best = _best(side)
+        if best is None:
+            return fallback
+        chosen = _front(side, best) if pick_off else _back(side, best)
+        return fallback if chosen is None else chosen
+
     next_oid = 1
     ts = 0
     mid = mid_start
@@ -111,11 +168,13 @@ def generate_synthetic_messages(
             continue
 
         if roll < 0.80:
-            # Cancels stay zero-intelligence: uniform over live orders at any
-            # depth. Plan 4 needs a cancellation mechanism that is independent
-            # of fill outcome by construction, so this one must not look at the
-            # queue front.
+            # Cancels are zero-intelligence by default: uniform over live
+            # orders at any depth. Plan 4's placebo needs a cancellation
+            # mechanism independent of fill outcome by construction, so the
+            # default path must not look at the queue front.
             oid = int(live[int(rng.integers(0, len(live)))])
+            if informed_cancel != 0.0 and rng.random() < abs(informed_cancel):
+                oid = _informed_target(side, informed_cancel > 0.0, oid)
             price, size, _ = resting[oid]
             if roll < 0.70:
                 qty = max(1, size // 2)

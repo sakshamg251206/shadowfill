@@ -1,4 +1,4 @@
-.PHONY: install test test-cpp lint bench bench-ci placebo reproduce clean
+.PHONY: install test test-cpp lint bench bench-ci placebo injection reproduce clean
 
 install:
 	pip install -e ".[dev]"
@@ -25,7 +25,10 @@ bench-ci:
 placebo:
 	pytest tests/python/test_placebo.py -v
 
-reproduce: test test-cpp bench placebo
+injection:
+	pytest tests/python/test_known_bias_injection.py -v
+
+reproduce: test test-cpp bench placebo injection
 	python -m shadowfill.ground_truth --config configs/ground_truth_synthetic.yaml
 
 clean:

@@ -768,3 +768,49 @@ about which dominates; this window says the second one does, by a wide margin.
 One window at one symbol on one day is not evidence for the hypothesis as
 stated — it is a reason to test it properly across regimes, which is what H2
 asks for and what multiple sessions will allow.
+
+### Y. Known-bias injection recovers one mechanism's sign, not both (Plan 4)
+
+**Date:** 2026-09-24.
+
+**Plan said:** RESEARCH-SPEC §7 specifies "inject a synthetic informed-canceller
+agent with a known ground-truth bias; the estimator must recover its sign and
+magnitude." §3 (H2) names two opposing mechanisms: cancelling hopeless orders
+should make censoring estimators *overstate* fill probability, and cancelling
+to avoid being picked off should make them *understate*.
+
+**What was built:** `generate_synthetic_messages(informed_cancel=s)`, where
+`s > 0` targets the front of the best level (picked-off avoidance) and `s < 0`
+targets the back of the same level (hopeless queue). Both arms act at the touch
+so the only thing that varies is queue position. Targeting deep price *levels*
+was tried first and measured nothing at all: an order five levels down does not
+fill inside the horizon whether or not anyone cancels it, so removing it moves
+neither curve.
+
+**Found.** Error `KM - truth` at the 5 s horizon, 60k events, seed 101:
+
+| strength | −0.9 | −0.6 | −0.3 | 0.0 | +0.3 | +0.6 | +0.9 |
+|---|---|---|---|---|---|---|---|
+| error | −0.0344 | −0.0181 | −0.0083 | −0.0035 | −0.0117 | −0.0270 | −0.0450 |
+
+* The **picked-off direction is recovered cleanly**: negative at every horizon,
+  monotone in strength, well clear of the placebo's 0.02 noise floor, and
+  reproduced on seeds 101, 202 and 303.
+* Strength 0 reproduces the placebo, so the injection is inert when off.
+* **The hopeless direction does not reverse the sign.** It produces a negative
+  error of much the same shape as the picked-off arm.
+
+**Changed:** `tests/python/test_known_bias_injection.py` asserts the three
+verified facts and *pins the negative result* rather than asserting the
+predicted reversal. Verified to have teeth: making the injection inert fails
+two of the four tests.
+
+**Unresolved, and stated rather than buried.** Why the hopeless arm does not
+reverse is not established. A known confound is that the injection changes the
+book as well as the censoring mechanism -- repeatedly cancelling the back of
+the touch queue shortens queues for everyone, which raises fill probability on
+both curves at once. So this is **not** evidence against H2 on real data, and
+H2's existing "not supported" verdict rests on the six-symbol ITCH result, not
+on this. Separating the censoring mechanism from the book dynamics would need
+an injection that cancels without removing depth, which the current generator
+cannot express.

@@ -1,12 +1,12 @@
 # ShadowFill — Current Status
 
-**As of commit `0ffa8a5`, 2026-09-21.** This is a handoff document: it records
+**As of 2026-09-24.** This is a handoff document: it records
 where the project actually stands, including what is broken, unverified, or
 withdrawn. It is written to be read by someone with no memory of how any of it
 was arrived at.
 
 Read alongside `RESEARCH-SPEC.md` (the hypotheses and evaluation design) and
-`PLAN-AMENDMENTS.md` (26 amendments recording every deviation from plan and
+`PLAN-AMENDMENTS.md` (27 amendments recording every deviation from plan and
 why).
 
 ---
@@ -55,14 +55,14 @@ This is a measurement project. It never claims PnL and no strategy is proposed.
 | **Plan 1** — ground-truth engine | Built. 4 of 6 definition-of-done items pass; 2 are externally blocked (§7) |
 | **Plan 2** — data layer | Built on Nasdaq TotalView-ITCH. One session acquired and verified |
 | **Plan 3** — estimators + L2 ablation | Partly built. KM, Aalen–Johansen, matched comparison, block bootstrap, L2 ablation all exist. Cox, Fine–Gray, IPCW policy re-targeting, dependent-censoring bounds and the ML baseline do **not** |
-| **Plan 4** — failure tests + paper README | Placebo built and gating CI. The other four failure tests do not exist |
+| **Plan 4** — failure tests + paper README | Placebo and known-bias injection built and gating CI. The other three failure tests do not exist |
 
-**Concretely present:** 19 Python modules, 23 test files, 195 tests, 54
-commits, a C++20 engine with pybind11 bindings that agrees with the Python
-oracle byte-for-byte on real exchange data, and 6 committed result manifests.
+**Concretely present:** 19 Python modules, 24 test files, 199 tests, a C++20
+engine with pybind11 bindings that agrees with the Python oracle byte-for-byte
+on real exchange data, and 6 committed result manifests.
 
 **Repository:** `https://github.com/sakshamg251206/shadowfill.git`.
-`main` is **1 commit ahead of `origin/main`** — `0ffa8a5` is unpushed.
+`main` is **in sync with `origin/main`**.
 
 **Parked:** branch `plan-2a-recorder` holds a complete, tested Coinbase L3
 recorder that has no venue to record from (amendment U). Deliberately unmerged:
@@ -268,6 +268,7 @@ mypy (strict, python/shadowfill)   clean, 20 source files
 | check | status |
 |---|---|
 | **Placebo** (`make placebo`) | **passes** — −0.0000, −0.0002, −0.0015 at 100 ms / 1 s / 10 s. This gates everything |
+| **Known-bias injection** (`make injection`) | **passes** — an injected picked-off canceller is recovered with the right sign, monotone in strength. The opposite mechanism does *not* reverse sign; pinned as a negative result, amendment Y |
 | C++ / Python engine equivalence, synthetic | passes, five independent seeds |
 | C++ / Python engine equivalence, **real ITCH data** | passes — all ten outcome fields and all three diagnostics byte-identical |
 | Prefix invariance (no look-ahead) | passes |
@@ -330,9 +331,10 @@ passing.** `needs_itch` tests run when a sample is present.
 10. **~10% of matched shadow/order pairs have slightly differing queue-ahead**,
     because events sharing a timestamp can activate a shadow on a neighbouring
     event. Pinned by test at >90% exact.
-11. **Four of Plan 4's five failure tests do not exist**: known-bias injection,
-    impact stress, latency sweep, cross-regime generalisation, and
-    purged/embargoed cross-validation.
+11. **Three of Plan 4's five failure tests do not exist**: impact stress,
+    latency sweep, and cross-regime generalisation / purged-embargoed
+    cross-validation. Known-bias injection now exists (amendment Y) but
+    recovers only one of the two mechanisms H2 names.
 
 ### Open research questions
 
@@ -428,8 +430,11 @@ In priority order.
    second cross-listed name on a second day would establish whether it is a
    property of cross-listing or of that one symbol-day.
 4. **Build the remaining Plan 4 failure tests**, in order of what could
-   invalidate most: known-bias injection, latency sweep, impact stress,
-   cross-regime generalisation.
+   invalidate most: latency sweep, impact stress, cross-regime generalisation.
+   Known-bias injection is done. Its unresolved half — why hopeless-queue
+   cancellation does not reverse the measured sign on synthetic data — needs an
+   injection that removes an order from the risk set without removing depth
+   from the book.
 5. **Implement the other three L2 heuristics**, which turns H4 from a one-sided
    bound into a range.
 6. **Plan 3's missing estimators**: cause-specific Cox, Fine–Gray, IPCW policy
