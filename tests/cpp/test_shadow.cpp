@@ -161,3 +161,32 @@ TEST_CASE("no model drives ahead negative") {
     REQUIRE(ahead_after_anonymous_cancel(m, 500) >= 0);
   }
 }
+
+// --- First-passage times of queue-ahead. Mirrors the Python oracle's
+// test_crossing_times_* cases.
+TEST_CASE("crossing times record when ahead first drops below each threshold") {
+  std::vector<Event> events{
+      {0, 0, 1, 100, 1500, EventType::Add, Side::Bid},
+      {kSec, 1, 1, 100, 600, EventType::CancelPartial, Side::Bid},
+      {2 * kSec, 2, 1, 100, 850, EventType::CancelPartial, Side::Bid},
+      {3 * kSec, 3, 1, 100, 45, EventType::Execute, Side::Bid},
+      {4 * kSec, 4, 1, 100, 10, EventType::Execute, Side::Bid},
+  };
+  auto out = run(events, {place(1, 10)});
+  REQUIRE(out[0].ahead_at_insert == 1500);
+  REQUIRE(out[0].ahead_lt_1000_ts == kSec);
+  REQUIRE(out[0].ahead_lt_100_ts == 2 * kSec);
+  REQUIRE(out[0].ahead_lt_10_ts == 3 * kSec);
+  REQUIRE(out[0].ahead_lt_1_ts == 4 * kSec);
+}
+
+TEST_CASE("thresholds already below at insert take the insert time") {
+  std::vector<Event> events{
+      {0, 0, 1, 100, 5, EventType::Add, Side::Bid},
+      {kSec, 1, 2, 100, 5, EventType::Add, Side::Bid},
+  };
+  auto out = run(events, {place(1)});
+  REQUIRE(out[0].ahead_lt_1000_ts == 1);
+  REQUIRE(out[0].ahead_lt_10_ts == 1);
+  REQUIRE(out[0].ahead_lt_1_ts == -1);
+}

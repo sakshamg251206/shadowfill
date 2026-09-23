@@ -47,6 +47,11 @@ def test_cpp_matches_python_reference_field_by_field(seed):
         "first_fill_ts",
         "full_fill_ts",
         "filled_qty",
+        "assumed_ahead_events",
+        "ahead_lt_1000_ts",
+        "ahead_lt_100_ts",
+        "ahead_lt_10_ts",
+        "ahead_lt_1_ts",
     ):
         np.testing.assert_array_equal(
             actual[field],

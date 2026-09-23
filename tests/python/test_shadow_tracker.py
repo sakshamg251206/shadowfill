@@ -199,3 +199,66 @@ def test_assumed_ahead_events_is_zero_when_every_id_is_known():
     )
     out = run_reference(events, [place(ts=0, size=10)])[0]
     assert out.assumed_ahead_events == 0
+
+
+# --- First-passage times of queue-ahead. A matched shadow sits in its twin's
+# slot, so these are the real order's queue trajectory for as long as it lives;
+# ahead is monotone, so four crossing times describe it completely.
+
+
+def test_crossing_times_record_when_ahead_first_drops_below_each_threshold():
+    events = make_events(
+        [
+            (0, 1, 100, 1500, EventType.ADD, Side.BID),
+            (1 * SEC, 1, 100, 600, EventType.CANCEL_PARTIAL, Side.BID),  # 1500 -> 900
+            (2 * SEC, 1, 100, 850, EventType.CANCEL_PARTIAL, Side.BID),  # 900 -> 50
+            (3 * SEC, 1, 100, 45, EventType.EXECUTE, Side.BID),  # 50 -> 5
+            (4 * SEC, 1, 100, 10, EventType.EXECUTE, Side.BID),  # 5 -> 0
+        ]
+    )
+    out = run_reference(events, [place(ts=1, size=10)])[0]
+    assert out.ahead_at_insert == 1500
+    assert (out.ahead_lt_1000_ts, out.ahead_lt_100_ts) == (1 * SEC, 2 * SEC)
+    assert (out.ahead_lt_10_ts, out.ahead_lt_1_ts) == (3 * SEC, 4 * SEC)
+
+
+def test_thresholds_already_below_at_insert_are_stamped_with_insert_ts():
+    events = make_events(
+        [
+            (0, 1, 100, 5, EventType.ADD, Side.BID),
+            (1 * SEC, 2, 100, 5, EventType.ADD, Side.BID),
+        ]
+    )
+    out = run_reference(events, [place(ts=1)])[0]
+    assert out.insert_ts == 1
+    assert out.ahead_lt_1000_ts == out.ahead_lt_100_ts == out.ahead_lt_10_ts == 1
+    assert out.ahead_lt_1_ts == -1, "never reached the front"
+
+
+def test_one_event_can_cross_several_thresholds_at_once():
+    events = make_events(
+        [
+            (0, 1, 100, 2000, EventType.ADD, Side.BID),
+            (1 * SEC, 1, 100, 2000, EventType.DELETE, Side.BID),
+        ]
+    )
+    out = run_reference(events, [place(ts=1)])[0]
+    assert out.ahead_lt_1000_ts == out.ahead_lt_100_ts == 1 * SEC
+    assert out.ahead_lt_10_ts == out.ahead_lt_1_ts == 1 * SEC
+
+
+def test_crossing_times_are_ordered_and_inside_the_life():
+    from shadowfill.placements import place_matched_to_orders
+    from shadowfill.synthetic import generate_synthetic_messages
+
+    events = generate_synthetic_messages(n_events=15_000, seed=3)
+    placements = place_matched_to_orders(events, horizon_ns=5 * SEC)
+    for o in run_reference(events, placements):
+        if o.status == Status.NOT_ACTIVATED:
+            continue
+        stamps = [o.ahead_lt_1000_ts, o.ahead_lt_100_ts, o.ahead_lt_10_ts, o.ahead_lt_1_ts]
+        seen = [t for t in stamps if t != -1]
+        # Crossing a lower threshold implies having crossed every higher one.
+        assert stamps[: len(seen)] == seen
+        assert seen == sorted(seen)
+        assert all(t >= o.insert_ts for t in seen)

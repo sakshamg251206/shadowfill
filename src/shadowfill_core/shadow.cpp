@@ -58,6 +58,7 @@ void ShadowTracker::activate(std::int64_t now_ts, std::uint64_t now_seq) {
 
     const std::size_t index = actives_.size();
     const std::int64_t expiry = p.effective_ts() + p.horizon_ns;
+    record_crossings(o, o.ahead_at_insert, p.effective_ts());
     actives_.push_back(Active{p, o, o.ahead_at_insert, expiry, false});
     by_level_[level_key(p.side, p.price)].push_back(index);
     expiries_.emplace(expiry, index);
@@ -117,6 +118,7 @@ void ShadowTracker::match(const Event& ev) {
         a.ahead -= anonymous_removal_from_ahead(
             cancel_model_, ev.size, a.ahead,
             book_.level_size(ev.side, ev.price));
+        record_crossings(a.outcome, a.ahead, ev.ts_ns);
         ++i;
         continue;
       }
@@ -128,6 +130,7 @@ void ShadowTracker::match(const Event& ev) {
           ++a.outcome.assumed_ahead_events;
         }
         a.ahead = std::max<std::int64_t>(0, a.ahead - ev.size);
+        record_crossings(a.outcome, a.ahead, ev.ts_ns);
       }
       ++i;
       continue;
@@ -138,6 +141,7 @@ void ShadowTracker::match(const Event& ev) {
     // shadow.
     const std::int64_t consumed = std::min(ev.size, a.ahead);
     a.ahead -= consumed;
+    record_crossings(a.outcome, a.ahead, ev.ts_ns);
     const std::int64_t residual = ev.size - consumed;
     if (residual <= 0) {
       ++i;

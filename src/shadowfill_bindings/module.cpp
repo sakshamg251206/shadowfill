@@ -101,6 +101,14 @@ py::dict replay(Arr<std::int64_t> ts_ns, Arr<std::uint64_t> seq,
   result["filled_qty"] = make_i64([](const Outcome& o) { return o.filled_qty; });
   result["assumed_ahead_events"] =
       make_i64([](const Outcome& o) { return o.assumed_ahead_events; });
+  result["ahead_lt_1000_ts"] =
+      make_i64([](const Outcome& o) { return o.ahead_lt_1000_ts; });
+  result["ahead_lt_100_ts"] =
+      make_i64([](const Outcome& o) { return o.ahead_lt_100_ts; });
+  result["ahead_lt_10_ts"] =
+      make_i64([](const Outcome& o) { return o.ahead_lt_10_ts; });
+  result["ahead_lt_1_ts"] =
+      make_i64([](const Outcome& o) { return o.ahead_lt_1_ts; });
   result["unknown_order_assumed_ahead"] = tracker.unknown_order_assumed_ahead();
   result["fifo_violations"] = tracker.fifo_violations();
   result["unknown_order_events"] = tracker.book().unknown_order_events();

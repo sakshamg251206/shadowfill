@@ -69,7 +69,23 @@ struct Outcome {
   std::int64_t full_fill_ts = -1;
   std::int64_t filled_qty = 0;
   std::int64_t assumed_ahead_events = 0;
+  // First timestamp queue-ahead fell below 1000 / 100 / 10 / 1; insert_ts if
+  // it started below, -1 if never. See replay.py::AHEAD_THRESHOLDS.
+  std::int64_t ahead_lt_1000_ts = -1;
+  std::int64_t ahead_lt_100_ts = -1;
+  std::int64_t ahead_lt_10_ts = -1;
+  std::int64_t ahead_lt_1_ts = -1;
 };
+
+/// Stamp every threshold `ahead` is now below and had not been before.
+/// Mirrors replay.py::record_crossings.
+inline void record_crossings(Outcome& o, std::int64_t ahead,
+                             std::int64_t ts_ns) noexcept {
+  if (ahead < 1000 && o.ahead_lt_1000_ts == -1) o.ahead_lt_1000_ts = ts_ns;
+  if (ahead < 100 && o.ahead_lt_100_ts == -1) o.ahead_lt_100_ts = ts_ns;
+  if (ahead < 10 && o.ahead_lt_10_ts == -1) o.ahead_lt_10_ts = ts_ns;
+  if (ahead < 1 && o.ahead_lt_1_ts == -1) o.ahead_lt_1_ts = ts_ns;
+}
 
 class ShadowTracker {
  public:

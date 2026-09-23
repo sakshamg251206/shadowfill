@@ -29,6 +29,13 @@ OUTCOME_FIELDS = (
     "full_fill_ts",
     "filled_qty",
     "assumed_ahead_events",
+    # First-passage times of queue-ahead; -1 on an activated row means "never
+    # got that close to the front", a real observation, so it stays -1 on disk
+    # like an unfilled first_fill_ts.
+    "ahead_lt_1000_ts",
+    "ahead_lt_100_ts",
+    "ahead_lt_10_ts",
+    "ahead_lt_1_ts",
 )
 
 # Identity and the status code stay populated on every row: without them a

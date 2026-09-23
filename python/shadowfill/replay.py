@@ -205,6 +205,13 @@ class Outcome:
     full_fill_ts: int = -1
     filled_qty: int = 0
     assumed_ahead_events: int = 0
+    # First timestamp at which queue-ahead fell below each of AHEAD_THRESHOLDS;
+    # insert_ts if it started below, -1 if it never got there. -1 here is a
+    # real observation ("never reached"), like an unfilled first_fill_ts.
+    ahead_lt_1000_ts: int = -1
+    ahead_lt_100_ts: int = -1
+    ahead_lt_10_ts: int = -1
+    ahead_lt_1_ts: int = -1
 
 
 @dataclass
@@ -213,6 +220,23 @@ class _Active:
     outcome: Outcome
     ahead: int
     expiry_ts: int
+
+
+#: Queue-ahead thresholds whose first-passage times each Outcome records. They
+#: are the edges of bias.DEFAULT_AHEAD_EDGES above zero, so the recorded times
+#: are exactly the moments an order changes queue-ahead stratum. ``ahead`` is
+#: monotone, so these four times describe the whole trajectory at that
+#: resolution -- which is what time-varying IPCW needs, at four integers per
+#: order instead of a trajectory dump.
+AHEAD_THRESHOLDS = (1000, 100, 10, 1)
+CROSSING_FIELDS = ("ahead_lt_1000_ts", "ahead_lt_100_ts", "ahead_lt_10_ts", "ahead_lt_1_ts")
+
+
+def record_crossings(outcome: Outcome, ahead: int, ts_ns: int) -> None:
+    """Stamp every threshold ``ahead`` is now below and had not been before."""
+    for threshold, field in zip(AHEAD_THRESHOLDS, CROSSING_FIELDS, strict=True):
+        if ahead < threshold and getattr(outcome, field) == -1:
+            setattr(outcome, field, ts_ns)
 
 
 class CancelModel(IntEnum):
@@ -319,6 +343,7 @@ class RefShadowTracker:
                 insert_seq=now_seq,
                 ahead_at_insert=self.book.level_size(p.side, p.price),
             )
+            record_crossings(outcome, outcome.ahead_at_insert, p.effective_ts)
             self._active.append(
                 _Active(
                     placement=p,
@@ -364,6 +389,7 @@ class RefShadowTracker:
                     # result -- H4 included -- bit-identical.
                     level = self.book.level_size(side, price)
                     a.ahead -= anonymous_removal_from_ahead(self.cancel_model, size, a.ahead, level)
+                    record_crossings(a.outcome, a.ahead, ts_ns)
                     continue
                 if not self._is_ahead(order_id, a.outcome.insert_seq):
                     continue
@@ -373,12 +399,14 @@ class RefShadowTracker:
                     self.unknown_order_assumed_ahead += 1
                     a.outcome.assumed_ahead_events += 1
                 a.ahead = max(0, a.ahead - size)
+                record_crossings(a.outcome, a.ahead, ts_ns)
                 continue
             # EXECUTE: price-time priority means the front of the queue is hit
             # first, so whatever this execution does not consume of `ahead`
             # reaches the shadow.
             consumed = min(size, a.ahead)
             a.ahead -= consumed
+            record_crossings(a.outcome, a.ahead, ts_ns)
             residual = size - consumed
             if residual <= 0:
                 continue
