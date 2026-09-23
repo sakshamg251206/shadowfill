@@ -9,8 +9,19 @@ have to be kept apart when reading the output, and the tests below pin both:
   claim to answer. At any latency >= 1 ns the twin arrives first, so the shadow
   sits exactly one twin-order-size further back. Measured: 100% of 65,949
   shadows across two seeds.
-* **Beyond 1 ns the effect is genuine latency**, and it only ever costs queue
-  position.
+* **Beyond 1 ns the effect is genuine latency.** At every instant both are
+  live, a later shadow has at least as much queue ahead as an earlier twin --
+  everything ahead of the early one, plus whatever arrived in between -- and
+  every operation is monotone in ``ahead``. So any execution that fills the
+  late shadow fills the early one too.
+
+What is *not* a theorem, and was wrongly asserted by the first version of this
+file: that mean ``ahead_at_insert`` rises with latency, or that F* falls. Both
+held on one synthetic seed. On AAPL mean ahead goes 776.7 -> 774.8 from 1 ms to
+5 ms, because the two latencies read ``ahead`` at different moments and orders
+ahead can cancel during the delay; and a later shadow's horizon also ends
+later, so its duration-based F* is not bounded by the early one's. They were
+replaced by the fill-time dominance they were approximating.
 """
 
 from __future__ import annotations
@@ -53,16 +64,26 @@ def test_the_observational_side_does_not_depend_on_latency(sweep):
         np.testing.assert_array_equal(row.comparison.naive_km, sweep[0].comparison.naive_km)
 
 
-def test_latency_only_ever_costs_queue_position(sweep):
-    means = [row.mean_ahead_at_insert for row in sweep]
-    assert all(a <= b for a, b in pairwise(means)), means
+def test_a_later_shadow_never_fills_before_its_earlier_twin(sweep):
+    """The dominance theorem, exact and per shadow, for every adjacent latency pair.
 
-
-def test_latency_never_increases_the_true_fill_rate(sweep):
-    for earlier, later in pairwise(sweep):
-        assert np.all(later.comparison.ground_truth <= earlier.comparison.ground_truth), (
-            f"fill rate rose from {earlier.latency_ns} ns to {later.latency_ns} ns"
+    If the late shadow fills at tau inside the early shadow's own window, the
+    early one had already filled, at or before tau.
+    """
+    horizon = 5 * SEC
+    for early, late in pairwise(sweep):
+        e, lt = early.columns, late.columns
+        inside = (
+            (lt["first_fill_ts"] != -1)
+            & (e["insert_ts"] != -1)
+            & (lt["first_fill_ts"] <= e["insert_ts"] + horizon)
         )
+        assert inside.sum() > 0, "vacuous: no late fills inside the early windows"
+        early_fill = e["first_fill_ts"][inside]
+        assert np.all(early_fill != -1), (
+            f"{late.latency_ns} ns filled where {early.latency_ns} ns did not"
+        )
+        assert np.all(early_fill <= lt["first_fill_ts"][inside])
 
 
 def test_one_nanosecond_moves_every_shadow_behind_its_twin(events):

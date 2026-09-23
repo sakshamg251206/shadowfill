@@ -12,7 +12,10 @@ any latency of at least 1 ns the twin reaches the book first, and the shadow
 sits exactly one twin-order-size further back: "what if a *copy* of this order
 had arrived Δ later". The step between the two is measured exactly, per
 shadow, in ``tests/python/test_latency.py``. Everything beyond 1 ns is genuine
-latency, and it can only cost queue position.
+latency: at every instant both are live, a later shadow has at least as much
+queue ahead as an earlier twin, so it never fills first. That is a statement
+about a common instant -- ``ahead_at_insert`` is read at *different* instants
+per latency and need not rise, and on AAPL it does not always.
 
 The observational side does not move with latency -- Kaplan-Meier is fitted on
 real orders, which have no latency -- so every change in the error comes from
