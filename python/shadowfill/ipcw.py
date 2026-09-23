@@ -237,13 +237,22 @@ def tv_ipcw_fill_curve(
     events = np.bincount(exit_cell[cancelled], weights=w[cancelled], minlength=N_CELLS)
     hazard = np.divide(events, exposure_total, out=np.zeros(N_CELLS), where=exposure_total > 0)
 
-    filled = cause == FILL
+    # Only fills that are actually in the (re)sample carry weight. An undrawn
+    # row can sit past the resample's last window-censoring time, where
+    # G_admin = 0, and computing its weight gave 0/0 -- harmless, since such
+    # rows lie hours past any horizon, but not something to leave in.
+    filled = (cause == FILL) & (w > 0)
     g_cancel = np.exp(-(exposure[filled] @ hazard))
     admin = cause == _CENSORED_ADMIN
     g_admin = left_survival(durations, admin, ~admin, w)[filled]
+    g = g_cancel * g_admin
+    if np.any(g <= 0):
+        # A drawn fill is in its own risk set just before it fills, so neither
+        # factor can be zero for it; if one is, the estimator is broken.
+        raise ValueError("a sampled fill has zero probability of being uncensored")
 
     contribution = np.zeros(len(durations))
-    contribution[filled] = w[filled] / (g_cancel * g_admin)
+    contribution[filled] = w[filled] / g
     return np.array([contribution[durations <= h].sum() for h in horizons]) / float(w.sum())
 
 
