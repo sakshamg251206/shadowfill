@@ -16,7 +16,7 @@ from .dataset import load_events
 from .lobster import load_lobster_messages
 from .placements import place_top_of_book_grid
 from .provenance import environment, git_sha, sha256_file
-from .replay import Placement, Status, replay_reference
+from .replay import CancelModel, Placement, Status, replay_reference
 
 OUTCOME_FIELDS = (
     "shadow_id",
@@ -101,7 +101,9 @@ def load_messages(path: str | Path) -> tuple[np.ndarray, str]:
     raise ValueError(f"unknown input format for {path.name!r}: expected .parquet or .csv")
 
 
-def _run_cpp(events: np.ndarray, placements: list[Placement]) -> dict[str, Any]:
+def _run_cpp(
+    events: np.ndarray, placements: list[Placement], cancel_model: int = CancelModel.FRONT
+) -> dict[str, Any]:
     from shadowfill import _core
 
     return _core.replay(
@@ -119,11 +121,15 @@ def _run_cpp(events: np.ndarray, placements: list[Placement]) -> dict[str, Any]:
         np.array([p.price for p in placements], dtype=np.int64),
         np.array([p.size for p in placements], dtype=np.int64),
         np.array([p.horizon_ns for p in placements], dtype=np.int64),
+        int(cancel_model),
     )
 
 
 def compute_outcomes(
-    events: np.ndarray, placements: list[Placement], engine: str
+    events: np.ndarray,
+    placements: list[Placement],
+    engine: str,
+    cancel_model: int = CancelModel.FRONT,
 ) -> tuple[dict[str, np.ndarray], dict[str, int]]:
     """Run one engine and return (outcome columns, diagnostics).
 
@@ -131,7 +137,7 @@ def compute_outcomes(
     run cannot diverge in how they invoked the engine.
     """
     if engine == "cpp":
-        result = _run_cpp(events, placements)
+        result = _run_cpp(events, placements, cancel_model)
         columns = {f: np.asarray(result[f], dtype="int64") for f in OUTCOME_FIELDS}
         return columns, {
             "unknown_order_assumed_ahead": int(result["unknown_order_assumed_ahead"]),
@@ -139,7 +145,7 @@ def compute_outcomes(
             "unknown_order_events": int(result["unknown_order_events"]),
         }
     if engine == "python":
-        outcomes, raw = replay_reference(events, placements)
+        outcomes, raw = replay_reference(events, placements, cancel_model)
         columns = {
             f: np.array([getattr(o, f) for o in outcomes], dtype="int64") for f in OUTCOME_FIELDS
         }

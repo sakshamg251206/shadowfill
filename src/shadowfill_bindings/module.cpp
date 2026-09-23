@@ -21,7 +21,11 @@ py::dict replay(Arr<std::int64_t> ts_ns, Arr<std::uint64_t> seq,
                 Arr<std::int8_t> side, Arr<std::uint64_t> p_shadow_id,
                 Arr<std::int64_t> p_ts_ns, Arr<std::int64_t> p_latency_ns,
                 Arr<std::int8_t> p_side, Arr<std::int64_t> p_price,
-                Arr<std::int64_t> p_size, Arr<std::int64_t> p_horizon_ns) {
+                Arr<std::int64_t> p_size, Arr<std::int64_t> p_horizon_ns,
+                int cancel_model) {
+  if (cancel_model < 0 || cancel_model > 2) {
+    throw std::invalid_argument("cancel_model must be 0 (front), 1 (back) or 2 (proportional)");
+  }
   const auto n = static_cast<std::size_t>(ts_ns.size());
   for (const auto& sz : {seq.size(), order_id.size(), price.size(),
                          size.size(), type.size(), side.size()}) {
@@ -46,7 +50,7 @@ py::dict replay(Arr<std::int64_t> ts_ns, Arr<std::uint64_t> seq,
         p_horizon_ns.at(i)});
   }
 
-  ShadowTracker tracker(std::move(placements));
+  ShadowTracker tracker(std::move(placements), static_cast<CancelModel>(cancel_model));
   {
     py::gil_scoped_release release;
     auto t = ts_ns.unchecked<1>();
@@ -126,5 +130,5 @@ PYBIND11_MODULE(_core, m) {
         py::arg("size"), py::arg("type"), py::arg("side"),
         py::arg("p_shadow_id"), py::arg("p_ts_ns"), py::arg("p_latency_ns"),
         py::arg("p_side"), py::arg("p_price"), py::arg("p_size"),
-        py::arg("p_horizon_ns"));
+        py::arg("p_horizon_ns"), py::arg("cancel_model") = 0);
 }

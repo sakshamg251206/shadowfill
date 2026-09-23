@@ -215,6 +215,50 @@ class _Active:
     expiry_ts: int
 
 
+class CancelModel(IntEnum):
+    """How an *anonymous* cancel is attributed to the queue around a shadow.
+
+    Only matters on an L2-ablated stream, where cancels carry ``order_id == 0``
+    and nobody can say whether the removed size sat ahead of the shadow or
+    behind it. With ``L`` shares at the level and ``a`` of them ahead, a cancel
+    of ``q`` removes from ahead:
+
+    ``FRONT``         ``min(q, a)`` -- optimistic, the queue shrinks as fast as
+                      it possibly could. The engine's original behaviour.
+    ``BACK``          ``max(0, q - (L - a))`` -- pessimistic, everything behind
+                      goes first.
+    ``PROPORTIONAL``  ``floor(q * a / L)`` -- the expected value when the
+                      cancelled share is uniform over the level's shares.
+
+    Integer floor so the Python oracle and the C++ engine agree bit for bit:
+    both operands are non-negative, so Python ``//`` and C++ ``/`` coincide.
+    "Uniform over orders" is not offered: it needs an order count, which an L2
+    feed does not carry, so on L2 it collapses into ``PROPORTIONAL``.
+    """
+
+    FRONT = 0
+    BACK = 1
+    PROPORTIONAL = 2
+
+
+#: The order id ``l2.ablate_to_l2`` writes onto every cancel and delete.
+ANONYMOUS_ORDER_ID = 0
+
+
+def anonymous_removal_from_ahead(model: int, qty: int, ahead: int, level: int) -> int:
+    """Shares of an anonymous cancel of ``qty`` that came from ahead of a shadow."""
+    if model == CancelModel.BACK:
+        behind = max(0, level - ahead)
+        taken = max(0, qty - behind)
+    elif model == CancelModel.PROPORTIONAL:
+        taken = qty * ahead // level if level > 0 else 0
+    else:
+        taken = qty
+    # Clamped because a windowed session can leave a level holding less than
+    # the cancel removes -- orders resting from before the window are absent.
+    return min(ahead, taken)
+
+
 class RefShadowTracker:
     """Never-cancel shadow-order accounting over a canonical event stream.
 
@@ -238,8 +282,14 @@ class RefShadowTracker:
     hypothetical order.
     """
 
-    def __init__(self, book: RefBook, placements: list[Placement]) -> None:
+    def __init__(
+        self,
+        book: RefBook,
+        placements: list[Placement],
+        cancel_model: int = CancelModel.FRONT,
+    ) -> None:
         self.book = book
+        self.cancel_model = int(cancel_model)
         self._pending = sorted(placements, key=lambda p: (p.effective_ts, p.shadow_id))
         self._next = 0
         self._active: list[_Active] = []
@@ -307,6 +357,14 @@ class RefShadowTracker:
             if p.side != side or p.price != price:
                 continue
             if etype in (EventType.CANCEL_PARTIAL, EventType.DELETE):
+                if order_id == ANONYMOUS_ORDER_ID and self.cancel_model != CancelModel.FRONT:
+                    # An L2 heuristic, not the unknown-id assumption, so it
+                    # does not count towards assumed_ahead_events. FRONT stays
+                    # on the original path below, which keeps every committed
+                    # result -- H4 included -- bit-identical.
+                    level = self.book.level_size(side, price)
+                    a.ahead -= anonymous_removal_from_ahead(self.cancel_model, size, a.ahead, level)
+                    continue
                 if not self._is_ahead(order_id, a.outcome.insert_seq):
                     continue
                 if a.ahead > 0 and self.book.find(order_id) is None:
@@ -376,14 +434,16 @@ class RefShadowTracker:
 
 
 def replay_reference(
-    events: np.ndarray, placements: list[Placement]
+    events: np.ndarray,
+    placements: list[Placement],
+    cancel_model: int = CancelModel.FRONT,
 ) -> tuple[list[Outcome], dict[str, int]]:
     """Replay ``events`` and return (outcomes ordered by shadow_id, diagnostics).
 
     The diagnostics carry the same three counters the C++ engine reports, so a
     run is traceable whichever engine produced it.
     """
-    tracker = RefShadowTracker(RefBook(), placements)
+    tracker = RefShadowTracker(RefBook(), placements, cancel_model)
     for e in events:
         tracker.on_event(
             int(e["ts_ns"]),
@@ -406,6 +466,10 @@ def replay_reference(
     return outcomes, diagnostics
 
 
-def run_reference(events: np.ndarray, placements: list[Placement]) -> list[Outcome]:
+def run_reference(
+    events: np.ndarray,
+    placements: list[Placement],
+    cancel_model: int = CancelModel.FRONT,
+) -> list[Outcome]:
     """Replay ``events`` and return one Outcome per placement, ordered by shadow_id."""
-    return replay_reference(events, placements)[0]
+    return replay_reference(events, placements, cancel_model)[0]

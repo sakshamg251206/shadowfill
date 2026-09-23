@@ -125,3 +125,39 @@ TEST_CASE("activated and still resting at end of data is truncated") {
   REQUIRE(out[0].status == Status::Truncated);
   REQUIRE(out[0].ahead_at_insert == 10);
 }
+
+// --- L2 queue models for anonymous cancels. Mirrors
+// tests/python/test_cancel_models.py; the Python oracle is authoritative.
+namespace {
+std::int64_t ahead_after_anonymous_cancel(CancelModel model, std::int64_t qty) {
+  // 30 shares ahead of the shadow, 70 behind, then an id-0 cancel of `qty`.
+  std::vector<Event> events{
+      {0, 0, 1, 100, 30, EventType::Add, Side::Bid},
+      {kSec, 1, 2, 100, 70, EventType::Add, Side::Bid},
+      {2 * kSec, 2, 0, 100, qty, EventType::Delete, Side::Bid},
+  };
+  ShadowTracker tracker({place(1, 10, 0, 100 * kSec)}, model);
+  for (const auto& ev : events) tracker.on_event(ev);
+  tracker.finalize();
+  return tracker.outcomes()[0].ahead_at_end;
+}
+}  // namespace
+
+TEST_CASE("front takes an anonymous cancel from ahead") {
+  REQUIRE(ahead_after_anonymous_cancel(CancelModel::Front, 40) == 0);
+}
+
+TEST_CASE("back takes an anonymous cancel from behind first") {
+  REQUIRE(ahead_after_anonymous_cancel(CancelModel::Back, 40) == 30);
+  REQUIRE(ahead_after_anonymous_cancel(CancelModel::Back, 80) == 20);
+}
+
+TEST_CASE("proportional takes the ahead share of the level, floored") {
+  REQUIRE(ahead_after_anonymous_cancel(CancelModel::Proportional, 40) == 18);
+}
+
+TEST_CASE("no model drives ahead negative") {
+  for (auto m : {CancelModel::Front, CancelModel::Back, CancelModel::Proportional}) {
+    REQUIRE(ahead_after_anonymous_cancel(m, 500) >= 0);
+  }
+}

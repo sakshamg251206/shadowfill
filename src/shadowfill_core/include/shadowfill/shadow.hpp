@@ -27,6 +27,23 @@ enum class Status : std::uint8_t {
   NotActivated = 4,
 };
 
+/// How an anonymous cancel (order_id == 0, as written by l2.ablate_to_l2) is
+/// attributed to the queue around a shadow. Values match
+/// python/shadowfill/replay.py::CancelModel, which is authoritative -- see its
+/// docstring for the three formulas. Integer arithmetic throughout, so the
+/// oracle and this engine agree bit for bit.
+enum class CancelModel : std::uint8_t {
+  Front = 0,
+  Back = 1,
+  Proportional = 2,
+};
+
+/// Shares of an anonymous cancel of `qty` that came from ahead of a shadow.
+[[nodiscard]] std::int64_t anonymous_removal_from_ahead(CancelModel model,
+                                                        std::int64_t qty,
+                                                        std::int64_t ahead,
+                                                        std::int64_t level) noexcept;
+
 struct Placement {
   std::uint64_t shadow_id;
   std::int64_t ts_ns;
@@ -56,7 +73,8 @@ struct Outcome {
 
 class ShadowTracker {
  public:
-  explicit ShadowTracker(std::vector<Placement> placements);
+  explicit ShadowTracker(std::vector<Placement> placements,
+                         CancelModel cancel_model = CancelModel::Front);
 
   void on_event(const Event& ev);
   void finalize();
@@ -102,6 +120,7 @@ class ShadowTracker {
   void settle(std::size_t index);
 
   OrderBook book_;
+  CancelModel cancel_model_;
   std::vector<Placement> pending_;
   std::size_t next_ = 0;
 

@@ -27,4 +27,5 @@ def replay(
     p_price: npt.NDArray[np.int64],
     p_size: npt.NDArray[np.int64],
     p_horizon_ns: npt.NDArray[np.int64],
+    cancel_model: int = 0,
 ) -> dict[str, Any]: ...

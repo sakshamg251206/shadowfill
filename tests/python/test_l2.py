@@ -72,3 +72,38 @@ def test_ablation_shows_up_in_the_engine_diagnostics():
     _, truth_diag = compute_outcomes(events, placements, "cpp")
     _, l2_diag = compute_outcomes(ablate_to_l2(events), placements, "cpp")
     assert l2_diag["unknown_order_assumed_ahead"] > truth_diag["unknown_order_assumed_ahead"]
+
+
+def test_run_reports_every_heuristic_ordered_optimistic_to_pessimistic(tmp_path):
+    """All three L2 guesses against the same L3 truth, on the same blocks.
+
+    The per-shadow ordering front >= proportional >= back is proven in
+    test_cancel_models.py, so the aggregate fill curves -- and therefore the
+    errors against the one shared truth -- must order the same way.
+    """
+    pytest.importorskip("shadowfill._core")
+    from shadowfill.l2 import HEURISTICS, run_l2_ablation
+    from shadowfill.synthetic import write_synthetic_csv
+
+    events = generate_synthetic_messages(n_events=30_000, seed=12)
+    data_path = tmp_path / "synthetic_message_10.csv"
+    write_synthetic_csv(events, data_path)
+
+    manifest = run_l2_ablation(
+        message_path=data_path,
+        out_dir=tmp_path / "out",
+        horizon_ns=5 * SEC,
+        horizons=np.array([SEC, 5 * SEC], dtype=np.int64),
+        window_ns=None,
+        block_ns=2 * SEC,
+        n_replicates=30,
+    )
+
+    assert {r["heuristic"] for r in manifest["rows"]} == set(HEURISTICS)
+    by = {(r["heuristic"], r["horizon_ns"]): r for r in manifest["rows"]}
+    for h in (SEC, 5 * SEC):
+        front, prop, back = (by[(name, h)]["l2_error"] for name in HEURISTICS)
+        assert front >= prop >= back, (h, front, prop, back)
+        truths = {by[(name, h)]["l3_truth"] for name in HEURISTICS}
+        assert len(truths) == 1, "every heuristic must be measured against one truth"
+    assert manifest["config"]["heuristics"] == list(HEURISTICS)

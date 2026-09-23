@@ -68,3 +68,27 @@ def test_cpp_produces_some_fills_so_the_comparison_is_meaningful():
     placements = grid_placements(events, every=250)
     actual = run_core(events, placements)
     assert (actual["status"] == int(Status.FILLED)).sum() > 0
+
+
+@pytest.mark.parametrize("seed", [4, 23, 57])
+@pytest.mark.parametrize("model", [0, 1, 2], ids=["front", "back", "proportional"])
+def test_cpp_matches_python_under_every_l2_cancel_model(seed, model):
+    """Invariant 5 extended to the L2 heuristics: on an ablated stream, where
+    every cancel is anonymous and the model decides the whole queue evolution,
+    the two engines must still agree field by field and on every diagnostic."""
+    from shadowfill.ground_truth import OUTCOME_FIELDS, compute_outcomes
+    from shadowfill.l2 import ablate_to_l2
+    from shadowfill.placements import place_matched_to_orders
+
+    events = ablate_to_l2(generate_synthetic_messages(n_events=30_000, seed=seed))
+    placements = place_matched_to_orders(events, horizon_ns=5_000_000_000)
+
+    py_cols, py_diag = compute_outcomes(events, placements, "python", cancel_model=model)
+    cpp_cols, cpp_diag = compute_outcomes(events, placements, "cpp", cancel_model=model)
+
+    for field in OUTCOME_FIELDS:
+        np.testing.assert_array_equal(
+            cpp_cols[field], py_cols[field], err_msg=f"{field}, model {model}, seed {seed}"
+        )
+    assert cpp_diag == py_diag
+    assert (py_cols["status"] == int(Status.FILLED)).sum() > 0, "vacuous: nothing filled"

@@ -4,8 +4,24 @@
 
 namespace shadowfill {
 
-ShadowTracker::ShadowTracker(std::vector<Placement> placements)
-    : pending_(std::move(placements)) {
+std::int64_t anonymous_removal_from_ahead(CancelModel model, std::int64_t qty,
+                                          std::int64_t ahead,
+                                          std::int64_t level) noexcept {
+  std::int64_t taken = qty;
+  if (model == CancelModel::Back) {
+    const std::int64_t behind = std::max<std::int64_t>(0, level - ahead);
+    taken = std::max<std::int64_t>(0, qty - behind);
+  } else if (model == CancelModel::Proportional) {
+    // Non-negative operands, so integer division floors exactly like Python //.
+    taken = level > 0 ? qty * ahead / level : 0;
+  }
+  // A windowed session can leave a level holding less than a cancel removes.
+  return std::min(ahead, taken);
+}
+
+ShadowTracker::ShadowTracker(std::vector<Placement> placements,
+                             CancelModel cancel_model)
+    : cancel_model_(cancel_model), pending_(std::move(placements)) {
   std::sort(pending_.begin(), pending_.end(),
             [](const Placement& a, const Placement& b) {
               if (a.effective_ts() != b.effective_ts())
@@ -94,6 +110,16 @@ void ShadowTracker::match(const Event& ev) {
     }
 
     if (ev.type != EventType::Execute) {
+      if (ev.order_id == 0 && cancel_model_ != CancelModel::Front) {
+        // An L2 heuristic, not the unknown-id assumption, so it does not
+        // count towards assumed_ahead_events. Front stays on the original
+        // path below, which keeps every committed result bit-identical.
+        a.ahead -= anonymous_removal_from_ahead(
+            cancel_model_, ev.size, a.ahead,
+            book_.level_size(ev.side, ev.price));
+        ++i;
+        continue;
+      }
       if (is_ahead(ev.order_id, a.outcome.insert_seq)) {
         if (a.ahead > 0 && book_.find(ev.order_id) == nullptr) {
           // The decrement rests on the unverifiable assumption that an id
