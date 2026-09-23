@@ -27,14 +27,42 @@ def sha256_file(path: str | Path) -> str:
     return digest.hexdigest()
 
 
-def git_sha() -> str:
-    """The commit that produced a run, or ``"unknown"`` outside a checkout."""
+def describe_head(repo: str | Path | None = None) -> str:
+    """HEAD's commit, suffixed ``-dirty`` if the working tree differs from it.
+
+    Untracked files count: a new module can be imported by the run, so a tree
+    with one is not the commit it claims to be. Returns ``"unknown"`` outside a
+    checkout.
+    """
+    cwd = None if repo is None else str(repo)
     try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
+        sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL, cwd=cwd
         ).strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
+        status = subprocess.check_output(
+            ["git", "status", "--porcelain"], text=True, stderr=subprocess.DEVNULL, cwd=cwd
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError, NotADirectoryError):
         return "unknown"
+    return f"{sha}-dirty" if status.strip() else sha
+
+
+#: Read once, when this module is first imported -- which is when a run starts,
+#: since every runner imports it at the top. The first version read HEAD when
+#: the manifest was *written*, at the end: a latency sweep started at 52239a4
+#: finished after f4aeb8c was committed and was credited to f4aeb8c, code it
+#: never ran. Capturing at start makes the pin describe what was loaded.
+_AT_START = describe_head()
+
+
+def git_sha() -> str:
+    """The commit that produced this run, as of when the run started.
+
+    ``-dirty`` means the run included uncommitted changes, so no commit fully
+    describes it; a result carrying that suffix should be regenerated from a
+    clean tree before it is cited.
+    """
+    return _AT_START
 
 
 def environment() -> dict[str, str]:
