@@ -1,0 +1,107 @@
+{
+  "git_sha": "260012a7740a7de12e1faa6be961eb2f32370f30",
+  "experiment": "ipcw",
+  "input_path": "data/parquet/date=2019-12-30/symbol=AAPL/events.parquet",
+  "input_format": "parquet",
+  "input_sha256": "302d1302390e18f09ff8b9cba28ac26dc57e83444cbbaaa52114c25c4e3bec1a",
+  "n_events": 1581219,
+  "engine": "cpp",
+  "environment": {
+    "python": "3.11.13",
+    "platform": "macOS-26.6.2-arm64-arm-64bit",
+    "numpy": "2.4.6",
+    "pandas": "3.0.6",
+    "pyarrow": "25.0.1",
+    "compiler": "clang 21.0.0 (clang-2100.1.1.101)"
+  },
+  "diagnostics": {
+    "unknown_order_assumed_ahead": 530,
+    "fifo_violations": 686,
+    "unknown_order_events": 380
+  },
+  "config": {
+    "censoring_model": "stratified Kaplan-Meier on queue-ahead at arrival",
+    "ahead_edges": [
+      0,
+      1,
+      10,
+      100,
+      1000
+    ],
+    "horizon_ns": 60000000000,
+    "horizons_ns": [
+      100000000,
+      1000000000,
+      10000000000,
+      60000000000
+    ],
+    "window_ns": [
+      34200000000000,
+      57600000000000
+    ],
+    "placement": "matched",
+    "block_ns": 1800000000000,
+    "n_replicates": 200,
+    "n_blocks": 13,
+    "seed": 0
+  },
+  "bootstrap_scope": "within-session blocks only; censoring model refitted per replicate",
+  "rows": [
+    {
+      "horizon_ns": 100000000,
+      "ground_truth": 0.017162892189197088,
+      "naive_km": 0.014047626703156624,
+      "ipcw": 0.014472228451645844,
+      "naive_error": -0.003115265486040464,
+      "naive_error_lo": -0.0036815596625303427,
+      "naive_error_hi": -0.002388862197707431,
+      "ipcw_error": -0.0026906637375512434,
+      "ipcw_error_lo": -0.003212563738978521,
+      "ipcw_error_hi": -0.002009550056843287,
+      "n_shadows": 791477,
+      "n_orders": 791477
+    },
+    {
+      "horizon_ns": 1000000000,
+      "ground_truth": 0.050648404548098935,
+      "naive_km": 0.037233715677707946,
+      "ipcw": 0.04044276418712895,
+      "naive_error": -0.01341468887039099,
+      "naive_error_lo": -0.017245588734733704,
+      "naive_error_hi": -0.00824338084290214,
+      "ipcw_error": -0.010205640360969985,
+      "ipcw_error_lo": -0.013563690793098417,
+      "ipcw_error_hi": -0.0054742546967015545,
+      "n_shadows": 791477,
+      "n_orders": 791477
+    },
+    {
+      "horizon_ns": 10000000000,
+      "ground_truth": 0.20585335862964627,
+      "naive_km": 0.10846455938789701,
+      "ipcw": 0.12081857367868916,
+      "naive_error": -0.09738879924174926,
+      "naive_error_lo": -0.11755936771403985,
+      "naive_error_hi": -0.06649529378020777,
+      "ipcw_error": -0.0850347849509571,
+      "ipcw_error_lo": -0.10329842535017855,
+      "ipcw_error_hi": -0.056900314433474895,
+      "n_shadows": 791477,
+      "n_orders": 791477
+    },
+    {
+      "horizon_ns": 60000000000,
+      "ground_truth": 0.4331310226928433,
+      "naive_km": 0.16436573882041094,
+      "ipcw": 0.19323566148562418,
+      "naive_error": -0.26876528387243237,
+      "naive_error_lo": -0.29254270036174523,
+      "naive_error_hi": -0.2253319421871366,
+      "ipcw_error": -0.23989536120721913,
+      "ipcw_error_lo": -0.26068806580404924,
+      "ipcw_error_hi": -0.20539118498222209,
+      "n_shadows": 791477,
+      "n_orders": 791477
+    }
+  ]
+}
