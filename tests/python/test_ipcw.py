@@ -77,3 +77,42 @@ def test_placebo_ipcw_agrees_with_the_never_cancel_truth():
     events = generate_synthetic_messages(n_events=60_000, seed=101)
     result = compare_ipcw(events, horizon_ns=5 * sec, horizons=np.array([sec, 5 * sec]))
     assert np.max(np.abs(result.ipcw - result.ground_truth)) < 0.02
+
+
+def test_run_writes_a_manifest_with_truth_naive_and_ipcw_intervals(tmp_path):
+    pytest.importorskip("shadowfill._core")
+    import json
+
+    from shadowfill.ipcw import run_ipcw
+    from shadowfill.synthetic import generate_synthetic_messages, write_synthetic_csv
+
+    sec = 1_000_000_000
+    events = generate_synthetic_messages(n_events=30_000, seed=5, informed_cancel=0.9)
+    data_path = tmp_path / "synthetic_message_10.csv"
+    write_synthetic_csv(events, data_path)
+
+    manifest = run_ipcw(
+        message_path=data_path,
+        out_dir=tmp_path / "out",
+        horizon_ns=5 * sec,
+        horizons=np.array([sec, 5 * sec], dtype=np.int64),
+        window_ns=None,
+        block_ns=2 * sec,
+        n_replicates=30,
+    )
+    on_disk = json.loads((tmp_path / "out" / "manifest.json").read_text())
+    assert on_disk["experiment"] == "ipcw"
+    assert len(on_disk["input_sha256"]) == 64
+    for row in manifest["rows"]:
+        for key in (
+            "naive_error",
+            "ipcw_error",
+            "naive_error_lo",
+            "naive_error_hi",
+            "ipcw_error_lo",
+            "ipcw_error_hi",
+        ):
+            assert key in row
+        assert row["naive_error_lo"] <= row["naive_error"] <= row["naive_error_hi"]
+        assert row["ipcw_error_lo"] <= row["ipcw_error"] <= row["ipcw_error_hi"]
+    assert manifest["config"]["censoring_model"].startswith("stratified")
