@@ -1,5 +1,5 @@
 {
-  "git_sha": "260012a7740a7de12e1faa6be961eb2f32370f30",
+  "git_sha": "c62a5fa07210e3351f7cad0f62e8754531a5a13c",
   "experiment": "ipcw",
   "input_path": "data/parquet/date=2019-12-30/symbol=AAPL/events.parquet",
   "input_format": "parquet",
@@ -21,6 +21,14 @@
   },
   "config": {
     "censoring_model": "stratified Kaplan-Meier on queue-ahead at arrival",
+    "tv_censoring_model": "piecewise-exponential cancel hazard over current queue-ahead bucket x order age; window-end censoring by Kaplan-Meier",
+    "age_edges_ns": [
+      1000000,
+      10000000,
+      100000000,
+      1000000000,
+      10000000000
+    ],
     "ahead_edges": [
       0,
       1,
@@ -58,6 +66,10 @@
       "ipcw_error": -0.0026906637375512434,
       "ipcw_error_lo": -0.003212563738978521,
       "ipcw_error_hi": -0.002009550056843287,
+      "tv_ipcw": 0.014245101146820295,
+      "tv_ipcw_error": -0.0029177910423767925,
+      "tv_ipcw_error_lo": -0.0034956363507199746,
+      "tv_ipcw_error_hi": -0.00216013300634437,
       "n_shadows": 791477,
       "n_orders": 791477
     },
@@ -72,6 +84,10 @@
       "ipcw_error": -0.010205640360969985,
       "ipcw_error_lo": -0.013563690793098417,
       "ipcw_error_hi": -0.0054742546967015545,
+      "tv_ipcw": 0.04066219038726032,
+      "tv_ipcw_error": -0.009986214160838613,
+      "tv_ipcw_error_lo": -0.014316380023990617,
+      "tv_ipcw_error_hi": -0.004689875182475948,
       "n_shadows": 791477,
       "n_orders": 791477
     },
@@ -86,6 +102,10 @@
       "ipcw_error": -0.0850347849509571,
       "ipcw_error_lo": -0.10329842535017855,
       "ipcw_error_hi": -0.056900314433474895,
+      "tv_ipcw": 0.11539772744976355,
+      "tv_ipcw_error": -0.09045563117988271,
+      "tv_ipcw_error_lo": -0.11194924154656445,
+      "tv_ipcw_error_hi": -0.05722017638971525,
       "n_shadows": 791477,
       "n_orders": 791477
     },
@@ -100,6 +120,10 @@
       "ipcw_error": -0.23989536120721913,
       "ipcw_error_lo": -0.26068806580404924,
       "ipcw_error_hi": -0.20539118498222209,
+      "tv_ipcw": 0.17165522877619557,
+      "tv_ipcw_error": -0.26147579391664777,
+      "tv_ipcw_error_lo": -0.28182942718317444,
+      "tv_ipcw_error_hi": -0.2187241899245408,
       "n_shadows": 791477,
       "n_orders": 791477
     }
