@@ -1,19 +1,62 @@
 # ShadowFill
 
-Counterfactual fill estimation from market-by-order data.
+**How wrong are passive-fill backtests? Measured against a ground truth that is
+computed, not modelled.**
 
-## What this repository currently contains
+Every market-making and passive-execution backtest rests on a fill model that
+nobody validates, because you cannot observe the fills of an order you never
+sent. Market-by-order data breaks that deadlock. It carries an id per order, so
+for a hypothetical order you know exactly which real orders were ahead of it and
+can watch each one trade or cancel. The fill time of a hypothetical order that
+never cancels is then a matter of arithmetic on one integer -- the queue ahead
+of it -- and that gives a ground truth to measure every fill estimator against.
+
+This is a measurement instrument. It proposes no strategy and claims no PnL.
+
+## What was found
+
+AAPL on Nasdaq, 2019-12-30, regular hours: 1,581,219 events, 791,477 real
+orders, each shadowed by a hypothetical order that never cancels. 95% intervals
+from a block bootstrap over half-hour blocks *within* that session.
+
+| question | answer | verdict |
+|---|---|---|
+| Does treating cancellation as censoring bias the fill curve? (H1) | Kaplan–Meier says 16% of passive orders fill within a minute; the truth is **43%** | **yes**, every interval excludes zero |
+| Does the sign depend on tick regime? (H2) | the sign flips for SAP, but not along the tick axis | **not supported** |
+| Does adverse selection offset it? (H3) | the offset is absent; edge error is 0.056 bps at 60 s, all of it from the fill rate | **not supported** |
+| What does an L2 feed cost? (H4) | even the expected-value L2 model promises **25%** more fills than it gets at 1 s; the three standard heuristics bracket the truth | **yes** |
+| Does correcting the bias change the decision? (H5) | policy rankings do not invert (0 of 10 pairs) | **not supported** |
+| Is it an artefact of assuming zero latency? | at 60 s the bias is −0.269 at 0 ms and −0.253 at 20 ms; at 1 s it flips sign | **headline robust** |
+| Does standard reweighting (IPCW) fix it? | on queue position and order age, it removes 3% at 60 s | **no** |
+
+Three of the five pre-registered hypotheses came back negative, and they are
+reported as such. The effects they were meant to explain are large.
+
+**Two failure tests gate all of it.** On a synthetic stream whose cancellation
+is independent by construction, the measured bias must vanish -- and it does,
+after it caught and killed an earlier design. And on a stream with a biased
+canceller injected on purpose, the measurement must find the bias with the
+right sign -- which it does for one mechanism, and not for the other.
+
+**What this is not.** One symbol and one day for most of it (six symbols for
+H2). The intervals cover variation within that session, not between sessions.
+The shadow order is assumed not to change anyone else's behaviour, and that is
+not yet stress-tested. Every limitation is listed at the end.
+
+## What this repository contains
 
 A validated ground-truth engine: given an MBO event stream and a schedule of
-hypothetical passive orders, it computes — by exact queue arithmetic, not by a
-model — whether each order would have filled, when, and how much queue sat ahead
-of it throughout its life.
+hypothetical passive orders, it computes -- by exact queue arithmetic, not by a
+model -- whether each order would have filled, when, and how much queue sat
+ahead of it throughout its life. It exists twice, as a readable Python oracle
+and a C++20 engine held to byte-identical output on synthetic and real data.
 
 On top of it, the pipeline that turns that into a measurement: a
 TotalView-ITCH adapter, Parquet materialisation, extraction of the real orders
-that rested in the same book, and a comparison of the never-cancel truth
-against the estimators a passive backtest relies on, with block-bootstrap
-intervals.
+that rested in the same book, the estimators a passive backtest relies on and
+the corrections a careful one would apply, each with block-bootstrap intervals
+and a manifest pinning the commit, input hash and configuration that produced
+every number.
 
 ## The first measurement
 
@@ -171,33 +214,133 @@ simulator cannot know whether it sat ahead of your order or behind it, so it
 guesses. The guess has never been validated, because validating it needs
 exactly the L3 ground truth computed here.
 
-Same session, same hypothetical orders, one field removed — the order id on
-every cancel, which is precisely what aggregation destroys:
+Same session, same hypothetical orders, one field removed -- the order id on
+every cancel, which is precisely what aggregation destroys. With the id gone, a
+simulator has to guess how much of each cancel sat ahead of you. The three
+standard guesses, each implemented as a queue model in the engine itself:
 
-| horizon | L3 truth | L2 cancel-from-front | error | 95% CI |
+| horizon | L3 truth | front (optimistic) | proportional (expected) | back (pessimistic) |
 |---|---|---|---|---|
-| 100 ms | 0.0172 | 0.0204 | +0.0032 | [+0.0026, +0.0036] |
-| 1 s | 0.0506 | 0.0655 | +0.0149 | [+0.0123, +0.0165] |
-| 10 s | 0.2059 | 0.2444 | +0.0385 | [+0.0352, +0.0411] |
-| 60 s | 0.4331 | 0.4664 | +0.0333 | [+0.0292, +0.0382] |
+| 100 ms | 0.0172 | +0.0032 [+0.0026, +0.0036] | +0.0026 [+0.0022, +0.0029] | −0.0015 [−0.0020, −0.0011] |
+| 1 s | 0.0506 | +0.0149 [+0.0123, +0.0165] | +0.0124 [+0.0101, +0.0139] | −0.0062 [−0.0074, −0.0046] |
+| 10 s | 0.2059 | +0.0385 [+0.0352, +0.0411] | +0.0338 [+0.0307, +0.0364] | −0.0200 [−0.0215, −0.0185] |
+| 60 s | 0.4331 | +0.0333 [+0.0292, +0.0382] | +0.0290 [+0.0251, +0.0339] | −0.0221 [−0.0240, −0.0200] |
 
-At one second the L2 simulator promises **29% more fills than it gets**. That
-is the same order of magnitude as the cancellation bias above — which is what
-H4 predicted, and it is measured rather than argued.
+Error in fill rate, L2 guess minus L3 truth, with 95% intervals from the same
+half-hour blocks for all three.
 
-The two errors point in opposite directions, so an L2 backtest that also treats
-cancellation as censoring gets a partial cancellation of its own. That is luck,
-not correctness, and nothing guarantees it holds in another regime.
+**The truth sits strictly between the pessimistic guess and the other two, at
+every horizon.** The informative column is *proportional* -- cancelled shares
+uniform over the level, the expected-value assumption a careful simulator would
+make. It still promises **25% more fills than it gets** at one second, with an
+interval clear of zero. So real cancellations at AAPL's touch come
+disproportionately from *behind* the typical resting order, not uniformly: the
+back of the queue is where orders get pulled. The fourth heuristic in the
+literature, uniform over *orders*, needs an order count that an L2 feed does
+not carry, so on L2 it collapses into proportional and is not offered
+separately.
 
-**Scope.** Only cancel-from-front is implemented, because it is what the
-engine's unknown-order path already does. It is the most *optimistic* of the
-four standard heuristics, so this is a one-sided bound: a simulator that
-assumes the best is wrong by at least this much. A test pins the direction —
-the L2 curve can never sit below the truth.
+The front-model errors are the same order of magnitude as the cancellation bias
+above, which is what H4 predicted. They point in opposite directions, so an L2
+backtest that also treats cancellation as censoring gets a partial offset of
+its own. That is luck, not correctness, and nothing guarantees it holds in
+another regime.
+
+Three properties are proven rather than measured, and tested: per shadow, fills
+order front ≥ proportional ≥ back (by induction -- each model removes the most,
+middle and least from ahead, and every later operation is monotone in it); the
+default front model is bit-identical to the engine's original behaviour, so
+nothing committed before the other two existed moved; and the Python oracle and
+the C++ engine agree field by field under all three.
 
     python -m shadowfill.l2 \
         --message-path data/parquet/date=2019-12-30/symbol=AAPL/events.parquet \
-        --out-dir results/h4-l2-aapl-2019-12-30 --block-ns 300000000000
+        --out-dir results/h4-l2-aapl-2019-12-30
+
+## Is it just latency?
+
+Every real participant is slower than a hypothetical order that appears at the
+exact instant it is wanted. The latency sweep reruns the H1 comparison with the
+shadow submitted Δ after the real order it twins. Same session, same blocks:
+
+| latency | error at 1 s | 95% CI | error at 60 s | 95% CI |
+|---|---|---|---|---|
+| 0 | −0.0134 | [−0.0172, −0.0082] | −0.2688 | [−0.2925, −0.2253] |
+| 1 ns | +0.0035 | [+0.0004, +0.0077] | −0.2570 | [−0.2816, −0.2125] |
+| 100 µs | +0.0055 | [+0.0025, +0.0098] | −0.2561 | [−0.2806, −0.2116] |
+| 1 ms | +0.0080 | [+0.0052, +0.0119] | −0.2550 | [−0.2795, −0.2107] |
+| 5 ms | +0.0104 | [+0.0076, +0.0139] | −0.2538 | [−0.2782, −0.2096] |
+| 20 ms | +0.0125 | [+0.0096, +0.0159] | −0.2527 | [−0.2770, −0.2085] |
+
+**The headline survives.** At 60 s the bias shrinks by about 6% across 0–20 ms
+and every interval stays far from zero.
+
+**The short-horizon bias changes sign.** At one second, any latency of at least
+1 ns turns an understatement into an overstatement, with intervals clear of
+zero. Read the step from 0 to 1 ns as a change of *question*, not of speed. At
+zero latency the shadow takes its real twin's exact queue slot, so it asks
+"would *this* order have filled had it not cancelled" -- the question survival
+estimators claim to answer, and the one H1 reports. From 1 ns on, the twin
+reaches the book first and the shadow sits behind it by exactly the twin's own
+size (checked per shadow: 100% of 65,949 across two seeds). That is the
+position a real participant is actually in. For such a participant, Kaplan–Meier
+fitted on real orders **over**-predicts fills at one second and
+**under**-predicts them by a quarter of the population at a minute.
+
+One property is proven and tested rather than measured: at every instant both
+are live, a later shadow has at least as much queue ahead as its earlier twin,
+so it never fills first. Two properties that look similar are *not* theorems,
+and an earlier version of the tests wrongly asserted them: mean queue-ahead at
+insertion need not rise with latency (on AAPL it falls from 776.7 to 774.8
+between 1 ms and 5 ms), and the true fill rate need not fall.
+
+    python -m shadowfill.latency \
+        --message-path data/parquet/date=2019-12-30/symbol=AAPL/events.parquet \
+        --out-dir results/latency-aapl-2019-12-30
+
+## Can a standard correction repair it?
+
+If traders cancel only on things the data shows, the bias is fixable:
+reweight each observed fill by the inverse probability that its order was still
+uncancelled when it filled (IPCW), with that probability modelled on the
+observables. Two censoring models, both refitted inside every bootstrap
+replicate:
+
+- **Queue at arrival** -- Kaplan–Meier of cancellation within strata of
+  queue-ahead at arrival. With this model IPCW is algebraically the size-weighted
+  average of per-stratum Kaplan–Meier curves (Satten & Datta 2001), which the
+  tests check to 1e-12. That check caught a real bug: tie handling that left a
+  `d·c/Y²` error at every time a fill and a cancel coincided.
+- **Queue now, plus age** -- a piecewise-constant cancellation hazard over cells
+  of *current* queue-ahead × order age, the maximum-likelihood estimate per cell.
+  Current queue position comes free from the engine: a matched shadow sits in
+  its twin's slot, so its queue-ahead *is* the real order's, and because it is
+  monotone, four first-passage times describe the whole trajectory.
+
+| horizon | truth | Kaplan–Meier | IPCW, queue at arrival | IPCW, queue now + age | share removed |
+|---|---|---|---|---|---|
+| 100 ms | 0.0172 | −0.0031 | −0.0027 | −0.0029 [−0.0035, −0.0022] | 6% |
+| 1 s | 0.0506 | −0.0134 | −0.0102 | −0.0100 [−0.0143, −0.0047] | 26% |
+| 10 s | 0.2059 | −0.0974 | −0.0850 | −0.0905 [−0.1119, −0.0572] | 7% |
+| 60 s | 0.4331 | −0.2688 | −0.2399 | −0.2615 [−0.2818, −0.2187] | 3% |
+
+**Standard reweighting on queue position and order age does not repair the
+bias.** At a minute it removes 3%, and every interval still excludes zero.
+
+**What this does not show** -- stated because it is the obvious over-reading:
+that the bias is driven by information the data cannot contain. The same
+estimator was run on synthetic streams with a *known*, observable cancellation
+mechanism injected (next section), and it recovered only 17–74% of that, too.
+The injected canceller responds to a joint state -- the front of the queue *at
+the best price* -- and queue bucket cannot tell the front of the touch from the
+front of a level five ticks deep. The covariate that could, "is my level
+currently the touch", is not monotone, so it cannot be summarised by passage
+times. A residual gap after reweighting is therefore a lower bound on what the
+correction misses, not a measurement of hidden information.
+
+    python -m shadowfill.ipcw \
+        --message-path data/parquet/date=2019-12-30/symbol=AAPL/events.parquet \
+        --out-dir results/ipcw-aapl-2019-12-30
 
 ## The test that nearly killed this
 
@@ -223,6 +366,35 @@ It runs on every commit:
 If it fails, nothing else in this repository means anything, and any result
 measured before it passed is withdrawn — as the earlier grid-based numbers were.
 
+### The other half: a bias put there on purpose
+
+A pipeline that always reported zero would pass the placebo too. So the second
+failure test injects a cancellation mechanism whose direction is known by
+construction, and requires the measurement to find it. The synthetic
+generator's `informed_cancel` knob makes cancels target the front of the best
+level -- picked-off avoidance, which removes fill-prone orders from the risk
+set and must make Kaplan–Meier *understate*.
+
+Error at 5 s on a 60,000-event stream (seed 101):
+
+| injection strength | 0 | +0.3 | +0.6 | +0.9 |
+|---|---|---|---|---|
+| error | −0.0035 | −0.0117 | −0.0270 | −0.0450 |
+
+Recovered with the right sign at every horizon, monotone in strength, clear of
+the noise floor, and reproduced on three seeds. Making the injection inert fails
+two of the four tests, so they bite.
+
+**The half that did not work.** The spec's H2 names an opposing mechanism --
+cancelling *hopeless* orders at the back of the queue -- and predicts it flips
+the sign. On this generator it does not: it produces a negative error of much
+the same shape. The test pins that negative result instead of asserting the
+prediction. A confound is known -- the injection removes depth from the book as
+well as orders from the risk set -- so it is not evidence against H2 on real
+data; `docs/PLAN-AMENDMENTS.md` §Y has the full account.
+
+    make placebo injection
+
 ## Quick start
 
     make install
@@ -238,8 +410,13 @@ The full measurement, on the same fixture:
     python -m shadowfill.experiment \
         --message-path tests/fixtures/synthetic_mbo_v1.csv \
         --out-dir results/h1-synthetic \
-        --grid-ns 50000000 --size 5 --horizon-ns 10000000000 \
-        --engine python --block-ns 2000000000
+        --horizon-ns 10000000000 --block-ns 2000000000 --no-window
+
+The fixture spans about 200 seconds, so read only its short horizons. At 60 s
+the truth curve has nothing left to observe and flattens, and the rows show
+large "errors" on a stream whose cancellation is independent by construction --
+they measure the window, not the estimator. The placebo test uses horizons up
+to 5 s for exactly this reason.
 
 ## Using real data
 
@@ -283,6 +460,12 @@ of gzip:
 | `TRUNCATED` | still resting, inside its horizon, when the data ran out |
 | `NOT_ACTIVATED` | its effective timestamp fell past the last event |
 | `RESTING` | in-flight only; never written |
+
+Each row also records the first time the order's queue-ahead fell below 1000,
+100, 10 and 1 shares (`ahead_lt_1000_ts` … `ahead_lt_1_ts`): its insert time if
+it started below, `-1` if it never got that close to the front. Queue-ahead is
+monotone, so these four times are its whole trajectory at that resolution; the
+time-varying IPCW model is built on them.
 
 `TRUNCATED` and `NOT_ACTIVATED` are kept apart deliberately. A truncated order
 existed and we stopped watching, which is a censored observation. A
@@ -350,20 +533,23 @@ party's reconstruction of the same session — so the book could be checked row
 by row against one this project did not build. Raw ITCH has no such file, and
 cannot: ITCH is the input that file is derived from, so any book built from it
 is our own reconstruction and comparing it to itself proves nothing. What the
-ITCH path checks instead is internal consistency — the book never crosses, all
-1,569 executions resolve to a live order, no removal exceeds the shares
-resting — measured, but necessary rather than sufficient. Level aggregation
+ITCH path checks instead is internal consistency — the book never crosses, every
+order reference resolves on each of the six materialised symbols (0 unresolved,
+from a parse of all 268,744,780 messages in the 2019-12-30 file), no removal exceeds the shares resting — measured, but
+necessary rather than sufficient. Level aggregation
 below the best price is not checked against an outside observer at all. The
 free LOBSTER sample is no longer published, so this is a limitation of what is
 obtainable, not a choice; `docs/PLAN-AMENDMENTS.md` §V.1 records it in full.
 
-**The observational population is matched, not identical.** Shadow orders are
-placed at the touch on a fixed clock; real orders arrive at all depths when
-their senders choose. The comparison restricts real orders to the touch and
-stratifies on queue-ahead, which is the dominant determinant of a fill and is
-measured identically on both sides. Size and arrival timing remain
-uncontrolled, and the unconditional row is reported beside the strata so the
-size of the composition effect is visible rather than assumed away.
+**Matched placement makes the populations identical, up to one known gap.**
+Each shadow is placed on a real order, at that order's own time, price, side and
+size, so the truth and the estimators describe the same orders and differ only
+in that the shadow never cancels. (An earlier design placed shadows on a clock
+and compared them with real orders at the touch; the placebo rejected it, and
+every number it produced is withdrawn -- see "The test that nearly killed
+this".) The known gap: events sharing a timestamp can activate a shadow on a
+neighbouring event, so about 10% of shadow/order pairs start with slightly
+different queue-ahead. A test pins the exact-match share above 90%.
 
 **Uncertainty is currently within-session only.** The bootstrap resamples
 contiguous blocks of time within one session. Day-to-day variation needs more
