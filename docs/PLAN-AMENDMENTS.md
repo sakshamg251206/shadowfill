@@ -814,3 +814,110 @@ H2's existing "not supported" verdict rests on the six-symbol ITCH result, not
 on this. Separating the censoring mechanism from the book dynamics would need
 an injection that cancels without removing depth, which the current generator
 cannot express.
+
+### Z. H4 measures three L2 heuristics, not one (Plan 3)
+
+**Date:** 2026-09-24.
+
+**Plan said:** RESEARCH-SPEC H4 names four cancel-position heuristics. Only
+cancel-from-front was built, recorded as needing "the tracker to attribute a
+fraction of each cancel, which the current engine cannot express".
+
+**Found:** it could, with one branch. An L2-ablated cancel carries order id 0,
+and that is the only place a heuristic is needed. With L shares at the level
+and a ahead of the shadow, an anonymous cancel of q removes from ahead
+`min(q, a)` (front), `floor(q·a/L)` (proportional) or `max(0, q − (L − a))`
+(back). Uniform-over-orders needs an order count an L2 feed does not carry, so
+on L2 it collapses into proportional and is not offered.
+
+**Changed:** `CancelModel` in both engines, default front on the original code
+path. Proven by induction and tested: per shadow, fills order front ≥
+proportional ≥ back. Front reproduces the previously committed H4 bit for bit,
+intervals included. H4 is now two-sided (`results/h4-l2-aapl-2019-12-30`).
+
+### AA. Latency sweep, and two "invariants" that were not theorems (Plan 4)
+
+**Date:** 2026-09-24.
+
+**Plan said:** RESEARCH-SPEC §7: "Latency sweep. Δ from 0 to several
+milliseconds; report sensitivity rather than a single number."
+
+**Found:** the step from 0 to 1 ns is a change of question, not of speed.
+Matched placement puts a zero-latency shadow in its twin's exact queue slot;
+from 1 ns on the twin arrives first and the shadow sits behind it by exactly the
+twin's size (100% of 65,949 shadows over two seeds). The first version of the
+tests also asserted that mean queue-ahead rises with latency and that F* falls.
+Both held on one synthetic seed and neither is a theorem: on AAPL mean ahead
+falls from 776.7 to 774.8 between 1 ms and 5 ms.
+
+**Changed:** those two tests were replaced by the dominance theorem they were
+approximating -- a later shadow never fills before its earlier twin inside the
+earlier one's window -- checked on 14,784 pairs before being asserted. Result in
+`results/latency-aapl-2019-12-30`: the 60 s bias moves from −0.2688 to −0.2527
+across 0–20 ms; the 1 s bias changes sign at 1 ns.
+
+### AB. Manifests credited a commit made while the run was in progress
+
+**Date:** 2026-09-24.
+
+**Plan said:** invariant 7, every run pins its git SHA.
+
+**Found:** `git_sha()` read HEAD when the manifest was written, at the end of a
+run. A latency sweep started at 52239a4 and was credited to f4aeb8c, which was
+committed while it ran. A dirty working tree was also invisible.
+
+**Changed:** HEAD is read once at import, when a run starts, and suffixed
+`-dirty` if the tree differs from it, untracked files included. The affected run
+was discarded and regenerated from a clean tree; it reproduced digit for digit.
+
+### AC. IPCW, and what its residual does and does not measure (Plan 3)
+
+**Date:** 2026-09-24.
+
+**Plan said:** RESEARCH-SPEC §4 lists IPCW re-targeting among the Plan 3
+estimators.
+
+**Built:** two censoring models. Stratified Kaplan–Meier on queue-ahead at
+arrival, which makes IPCW algebraically the size-weighted average of per-stratum
+KM curves -- checked to 1e-12, and that check caught a tie-ordering bug worth
+0.045 at the longest horizon. And a piecewise-exponential hazard over current
+queue-ahead × order age, fed by four first-passage times the engines now record
+per order (the shadow's queue-ahead *is* its twin's while the twin lives, and it
+is monotone, so four times describe the trajectory).
+
+**Found:** on AAPL they remove at most 26% of the bias, and 3% at 60 s. On
+synthetic streams with an injected, observable mechanism, the time-varying model
+recovers only 17–74% -- the canceller responds to "front of the queue at the
+best price", and queue bucket cannot distinguish the touch from a deeper level.
+
+**Consequence for claims:** the AAPL residual supports "standard reweighting on
+queue position and age does not repair the bias", not "the bias is driven by
+unobservable information". The README states the first and warns against the
+second.
+
+### AD. Cross-regime and cross-day transfer (Plan 4)
+
+**Date:** 2026-09-24.
+
+**Plan said:** RESEARCH-SPEC §7: "Cross-regime generalisation. Fit on one
+ticker/venue, test on another." And purged, embargoed cross-validation across
+days.
+
+**Built:** `shadowfill.transfer`. The correction and the pooled-source
+definition were fixed before any real data was examined; both are stated in the
+module docstring and the manifest. With only two sessions, "across days" is an
+out-of-day test in both directions rather than a purged k-fold scheme; the
+embargo is trivial because the sessions are nine months apart.
+
+### AE. Parallel range fetching for the second session (Plan 2)
+
+**Date:** 2026-09-24.
+
+The sequential fetcher averaged ~67 KB/s on 03272019, losing whole chunks to its
+low-speed timeout, while fresh range requests measured ~512 KB/s singly and
+~910 KB/s four at a time. `scripts/fetch_itch_parallel.sh` fetches each range
+into its own size-checked part file and appends only once all are verified. Its
+first version fed bash arithmetic the scientific notation macOS `seq` prints
+past ~1e6; the append guard left the prefix untouched, and offsets now go
+through `seq -f '%.0f'`. The file completed at 5,510,131,732 bytes, passed
+`gzip -t`, sha256 `7997025b9e09dd6c2ecb0bfa48a856197e6e800711ab67367ee0f2ab724b9ba8`.
