@@ -1,7 +1,5 @@
 # ShadowFill Ground-Truth Engine Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Build a validated engine that, given a market-by-order (MBO) event stream, computes the exact fill outcome of hypothetical never-cancel limit orders ("shadow orders") by queue arithmetic, and emits a reproducible ground-truth outcome table.
 
 **Architecture:** A canonical event schema sits between data adapters (LOBSTER first) and two independent replay implementations: a slow, obviously-correct Python reference and a fast C++20 engine. The two are held to bit-identical outputs by an equivalence test, so the Python version is the oracle and the C++ version is the workhorse. Shadow orders are never inserted into the book — they are tracked as a `queue-ahead` counter that only ever decreases, which is what makes the fill time computable rather than modelled.
@@ -87,7 +85,7 @@ shadowfill/
 │   └── bench_replay.py
 ├── scripts/
 │   └── fetch_lobster_sample.sh             # manual data download helper
-└── docs/superpowers/plans/                 # this file
+└── docs/plans/                             # this file
 ```
 
 **Responsibility boundaries:** `events.py` owns the schema and nothing else. `lobster.py` only translates vendor format → canonical events. `replay.py` owns book state and shadow accounting and knows nothing about files. `ground_truth.py` is the only module that touches disk for outputs. The C++ mirrors `replay.py` exactly; if the two ever disagree, the Python one is right by definition and the C++ is the bug.
@@ -2993,4 +2991,3 @@ about real-data reconstruction accuracy until they have been run:
 - **Plan 2 — Multi-venue data layer.** Coinbase L3 websocket recorder with gap detection and sequence-number validation, canonical-event adapter, Databento MBO adapter, Parquet partitioning, dataset manifests. Start the recorder first: the tape has to accumulate in wall-clock time.
 - **Plan 3 — Estimators and the L2 ablation.** Kaplan–Meier, cause-specific Cox, Aalen–Johansen, Fine–Gray, IPCW policy re-targeting, copula sensitivity bounds, and a discrete-time-hazard neural baseline; plus the L2 ablation harness (cancel-from-front/back/uniform heuristics) that quantifies what order ids are worth.
 - **Plan 4 — Experiments and the paper.** Markout/adverse-selection layer, bias measurement against Plan 1's ground truth, policy-ranking inversion study, impact-assumption stress tests, block-bootstrap confidence intervals, figures, and the paper-style README.
-

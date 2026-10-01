@@ -1,7 +1,7 @@
 # Plan amendments
 
 Deviations from
-`docs/superpowers/plans/2026-09-19-shadowfill-ground-truth-engine.md`.
+`docs/plans/2026-09-19-shadowfill-ground-truth-engine.md`.
 Where this file and the plan disagree, this file wins.
 
 Each entry records the date, what the plan said, what was found, and what

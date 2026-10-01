@@ -1,7 +1,7 @@
 # CLAUDE.md — ShadowFill
 
 Read this file, then `docs/RESEARCH-SPEC.md`, then
-`docs/superpowers/plans/2026-09-19-shadowfill-ground-truth-engine.md`.
+`docs/plans/2026-09-19-shadowfill-ground-truth-engine.md`.
 Do not start writing code until you have read all three.
 
 ## What this project is
@@ -93,7 +93,8 @@ tests/cpp/                Catch2 suite
 tests/fixtures/           committed synthetic MBO stream
 benchmarks/               throughput gate
 docs/RESEARCH-SPEC.md     hypotheses, novelty argument, evaluation design
-docs/superpowers/plans/   implementation plans, one per subsystem
+docs/plans/               implementation plans, one per subsystem
+docs/specs/               design specs that precede a plan
 ```
 
 ## Scope discipline

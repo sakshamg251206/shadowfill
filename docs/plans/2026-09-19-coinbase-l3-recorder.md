@@ -1,14 +1,12 @@
 # Coinbase L3 Recorder Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Record every Coinbase `level3` message for a configured set of products, verbatim and durably, with every discontinuity detected and written down.
 
 **Architecture:** One asyncio process. A reader task timestamps frames and enqueues them; a writer task appends the raw bytes to a zstd-compressed append-only tape *before* parsing them, then validates sequence numbers into a side-car ledger. Under backpressure the pipeline blocks rather than drops. Reconnection opens a new session, fetches a REST level-3 snapshot into the tape, and records the boundary.
 
 **Tech Stack:** Python 3.11, asyncio, `websockets`, `zstandard`, pytest.
 
-**Spec:** `docs/superpowers/specs/2026-09-19-coinbase-l3-recorder-design.md` — read it before Task 1.
+**Spec:** `docs/specs/2026-09-19-coinbase-l3-recorder-design.md` — read it before Task 1.
 
 ## Global Constraints
 
