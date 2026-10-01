@@ -643,7 +643,7 @@ what invariant 6 requires of CI.
 
 ### W. Plans 2 and 3 built past Plan 1's blocked definition of done
 
-**Why this needed saying.** CLAUDE.md's scope discipline says not to build into
+**Why this needed saying.** The working agreement's scope discipline says not to build into
 Plans 2-4 until Plan 1's definition of done is met and reviewed. Two of its six
 items — `pytest -m needs_lobster`, and top-of-book agreement with LOBSTER's own
 snapshots — are externally blocked and, per amendment V.1, cannot be recovered
