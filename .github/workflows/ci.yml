@@ -1,17 +1,60 @@
 name: ci
-on: [push, pull_request]
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  python:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r requirements-dev.lock
-      - run: pip install -e ".[dev]"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-dev.lock
+      - run: make install-locked
       - run: make lint
+
+  python:
+    name: python ${{ matrix.python }} (${{ matrix.deps }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 3.11 runs against the exact pins every committed result was produced
+          # with. Newer interpreters resolve the loose ranges in pyproject.toml,
+          # which is what a fresh `make install` gets, so drift in a dependency
+          # shows up here before it shows up for a reader.
+          - { python: "3.11", deps: locked }
+          - { python: "3.12", deps: latest }
+          - { python: "3.13", deps: latest }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-dev.lock
+      - if: matrix.deps == 'locked'
+        run: make install-locked
+      - if: matrix.deps == 'latest'
+        run: make install
       # SHADOWFILL_REQUIRE_CORE turns a missing extension module into a
       # collection error instead of a skip. The equivalence test guards itself
       # with importorskip, which is right for a pure-Python checkout and wrong
@@ -25,9 +68,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
       - run: make test-cpp
 
   bench:
@@ -37,8 +77,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r requirements-dev.lock
-      - run: pip install -e ".[dev]"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-dev.lock
+      - run: make install-locked
       # An absolute events/s gate assumes a machine, and a shared runner is
       # not one: the engine clears 2M/s on developer hardware and lands near
       # 1.4M/s here for no reason of its own. bench-ci instead times the

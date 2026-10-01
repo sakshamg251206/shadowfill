@@ -1,13 +1,28 @@
+# Mirrors `make lint`. The ruff rev is kept equal to the version pinned in
+# requirements-dev.lock so the hook and CI never disagree about formatting.
+#
+# Run outputs and the fixture are byte-exact artefacts: a manifest pins the
+# SHA-256 of the input it read, so no hook may rewrite them.
+exclude: ^(results/|tests/fixtures/)
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.5.7
+    rev: v0.16.8
     hooks:
       - id: ruff
         args: [--fix]
+        types_or: [python, pyi]
       - id: ruff-format
+        types_or: [python, pyi]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      # Third-party market data must never be committed (invariant 6). The
+      # synthetic fixture (~6.5 MB) is the largest file that belongs here.
+      - id: check-added-large-files
+        args: [--maxkb=8192]

@@ -36,8 +36,11 @@ MIN_SPEEDUP_VS_REFERENCE = 200.0
 
 def _placements(events):
     return place_top_of_book_grid(
-        events, grid_ns=10_000_000, size=100,
-        horizon_ns=10_000_000_000, latency_ns=0,
+        events,
+        grid_ns=10_000_000,
+        size=100,
+        horizon_ns=10_000_000_000,
+        latency_ns=0,
     )
 
 

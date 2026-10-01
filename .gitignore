@@ -1,13 +1,38 @@
-.venv/
-build/
-dist/
-*.egg-info/
+# Python
 __pycache__/
+*.py[cod]
 *.so
+.venv/
+venv/
+*.egg-info/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.hypothesis/
+.coverage
+htmlcov/
+
+# Build outputs (scikit-build-core and `make test-cpp`)
+build/
+dist/
+_skbuild/
+
+# Local configuration -- never commit credentials
+.env
+.env.*
+!.env.example
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Third-party market data is never committed (see README, "Using real data")
 data/
+
+# Run outputs: only each run's manifest.json is committed. The Parquet tables
+# are regenerated from the manifest's pinned commit, input hash and config.
 results/**
 !results/*/
 !results/*/manifest.json
