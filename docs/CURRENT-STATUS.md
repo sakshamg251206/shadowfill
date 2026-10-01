@@ -1,13 +1,15 @@
 # ShadowFill — Current Status
 
-**As of 2026-09-24.** This is a handoff document: it records
+**As of 2026-10-01.** This is a handoff document: it records
 where the project actually stands, including what is broken, unverified, or
 withdrawn. It is written to be read by someone with no memory of how any of it
 was arrived at.
 
 Read alongside `RESEARCH-SPEC.md` (the hypotheses and evaluation design) and
-`PLAN-AMENDMENTS.md` (27 amendments recording every deviation from plan and
-why).
+`PLAN-AMENDMENTS.md` (every deviation from plan and why) and `RESULTS.md`
+(every experiment in full). Sections 4 and 5 are the record of the 2026-09-24
+rerun of H1–H5; the IPCW, latency and three-heuristic H4 results that came
+after it are in `RESULTS.md` and amendments Z–AC.
 
 ---
 
@@ -54,17 +56,17 @@ This is a measurement project. It never claims PnL and no strategy is proposed.
 |---|---|
 | **Plan 1** — ground-truth engine | Built. 4 of 6 definition-of-done items pass; 2 are externally blocked (§7) |
 | **Plan 2** — data layer | Built on Nasdaq TotalView-ITCH. One session acquired and verified |
-| **Plan 3** — estimators + L2 ablation | Partly built. KM, Aalen–Johansen, matched comparison, block bootstrap, L2 ablation all exist. Cox, Fine–Gray, IPCW policy re-targeting, dependent-censoring bounds and the ML baseline do **not** |
-| **Plan 4** — failure tests + paper README | Placebo and known-bias injection built and gating CI. The other three failure tests do not exist |
+| **Plan 3** — estimators + L2 ablation | Partly built. KM, Aalen–Johansen, matched comparison, block bootstrap, L2 ablation under three queue heuristics, and IPCW with baseline and time-varying covariates all exist. Cox, Fine–Gray, IPCW policy re-targeting, dependent-censoring bounds and the ML baseline do **not** |
+| **Plan 4** — failure tests + paper README | Placebo and known-bias injection built and gating CI. Latency sweep run on AAPL. Cross-book transfer built and tested, not yet run on real data. The impact stress test does not exist |
 
-**Concretely present:** 19 Python modules, 24 test files, 199 tests, a C++20
+**Concretely present:** 21 Python modules, 29 test files, 253 tests, a C++20
 engine with pybind11 bindings that agrees with the Python oracle byte-for-byte
-on real exchange data, and 6 committed result manifests.
+on real exchange data, and 8 committed result manifests.
 
 **Repository:** `https://github.com/sakshamg251206/shadowfill.git`.
 `main` is **in sync with `origin/main`**.
 
-**Parked:** branch `plan-2a-recorder` holds a complete, tested Coinbase L3
+**Parked:** branch `plan-2a-recorder` (not on `origin`) holds a complete, tested Coinbase L3
 recorder that has no venue to record from (amendment U). Deliberately unmerged:
 merging code that cannot run would misrepresent what the repository does.
 
@@ -153,7 +155,7 @@ engine. H2 additionally ran across six symbols.
 | **H1** the bias exists and is material | **Complete** | **Supported.** All intervals exclude zero |
 | **H2** the sign is regime-dependent | **Complete** | **Not supported.** The sign does flip, but not along the tick axis |
 | **H3** adverse selection offsets it | **Complete** | **Number delivered, mechanism not supported.** The offset does not appear |
-| **H4** the L2 penalty | **Complete for one of four heuristics** | **Supported** for cancel-from-front |
+| **H4** the L2 penalty | **Complete** for front, proportional and back (amendment Z); uniform-over-orders needs an order count L2 does not carry | **Supported.** The three heuristics bracket the truth |
 | **H5** decision relevance | **Complete** | **Not supported.** Rankings do not invert |
 
 Three of five pre-registered claims came back negative. The headline effects
@@ -259,11 +261,15 @@ change which policy a desk would pick.
 ### Passing
 
 ```
-195 tests collected
-193 passed, 2 skipped
+253 tests collected
+CI selection (-m "not needs_lobster and not needs_itch"):
+  245 passed, 1 xfailed, 7 deselected   on 3.11 (locked), 3.12 and 3.13 (latest)
 ruff check   clean        ruff format --check   clean
-mypy (strict, python/shadowfill)   clean, 20 source files
+mypy (strict, python/shadowfill)   clean, 23 source files
 ```
+
+The one `xfail` is strict and deliberate: it pins the trade-through gap
+(§7, `IDEAS.md`).
 
 | check | status |
 |---|---|
@@ -283,7 +289,8 @@ passing.** `needs_itch` tests run when a sample is present.
 
 ### Failing
 
-**None.**
+**None.** The strict `xfail` above is a known limitation, not a failure; it
+turns into one when the engine is fixed.
 
 ---
 
@@ -319,10 +326,10 @@ passing.** `needs_itch` tests run when a sample is present.
 
 6. **The no-impact assumption is untested.** The shadow order is assumed not to
    change anyone else's behaviour. Plan 4's impact stress test does not exist.
-7. **Only one of four L2 heuristics is implemented** (cancel-from-front). It is
-   the most optimistic, so the H4 result is a one-sided bound. From-back and
-   uniform need the tracker to attribute a fraction of each cancel, which the
-   current engine cannot express.
+7. **Three of four L2 heuristics are implemented** (front, proportional,
+   back; amendment Z), and they bracket the truth. Uniform-over-orders needs
+   an order count that an L2 feed does not carry, so on L2 it collapses into
+   proportional.
 8. **The markout horizon is fixed at 1 s** and its sensitivity is unexplored.
 9. **The crossing cost in H5 is a session-median half-spread**, not the spread
    at each decision point. Deliberate — a per-order spread would make the cost
@@ -331,23 +338,31 @@ passing.** `needs_itch` tests run when a sample is present.
 10. **~10% of matched shadow/order pairs have slightly differing queue-ahead**,
     because events sharing a timestamp can activate a shadow on a neighbouring
     event. Pinned by test at >90% exact.
-11. **Three of Plan 4's five failure tests do not exist**: impact stress,
-    latency sweep, and cross-regime generalisation / purged-embargoed
-    cross-validation. Known-bias injection now exists (amendment Y) but
+11. **Plan 4's impact stress test does not exist.** The latency sweep has run
+    (amendment AA); cross-book transfer is built and tested but has no real-data
+    result yet (amendment AD). Known-bias injection exists (amendment Y) but
     recovers only one of the two mechanisms H2 names.
+12. **Trade-through fills are not credited.** The engine matches an execution
+    against a shadow only at the shadow's own price, so a shadow left alone at
+    a better price than the level an aggressor trades through is not filled.
+    It can only lower the computed truth. Unmeasured; pinned by a strict
+    `xfail` and written up in `IDEAS.md`. Fixing it changes every committed
+    result, so it must ship with a rerun.
 
 ### Open research questions
 
-12. **Why does SAP reverse sign?** Cross-listing and fragmented liquidity is
+13. **Why does SAP reverse sign?** Cross-listing and fragmented liquidity is
     the obvious candidate. Untested. It is the most interesting open thread in
     the project.
-13. **Does the tick-regime prediction hold over a wider range?** 0.35–2.10 bps
+14. **Does the tick-regime prediction hold over a wider range?** 0.35–2.10 bps
     may be too narrow to contain the regimes H2 is about.
-14. **Is the H1 bias stable across days and across regimes?** Unknown.
-15. **Would a correct competing-risks or IPCW estimator close the gap?**
-    Aalen–Johansen is implemented but answers a different question (fills under
-    *their* cancellation policies). The policy re-targeting that would answer
-    the counterfactual question is not built.
+15. **Is the H1 bias stable across days and across regimes?** Unknown.
+16. **Would a correct competing-risks or IPCW estimator close the gap?**
+    Aalen–Johansen answers a different question (fills under *their*
+    cancellation policies). IPCW on queue position and order age removes 3% of
+    the bias at 60 s (amendment AC); whether a richer censoring model would do
+    better is open, and the injection results say a residual is a lower bound
+    on what the correction misses, not a measure of hidden information.
 
 ---
 
@@ -421,23 +436,23 @@ process on the same box, so runner speed divides out.
 
 In priority order.
 
-1. **Push the unpushed commit.** `main` is 1 ahead of `origin/main`.
-2. **Acquire a second session** and re-run H1–H5 on both. This is the single
-   highest-value action: it converts the within-session bootstrap into the
-   across-session one the spec pre-registered, and tests whether any result is
-   stable across days. 14 more days are published; the chunked fetcher works.
+1. **Analyse the second session** and re-run H1–H5 on both. This is the
+   single highest-value action: it converts the within-session bootstrap into
+   the across-session one the spec pre-registered, and tests whether any
+   result is stable across days. The 2019-03-27 file has been fetched and
+   verified (amendment AE); it is not yet materialised in any committed result.
+   Run `shadowfill.transfer` across the two days at the same time.
+2. **Size the trade-through gap** (§7 item 12) with a diagnostic counter, then
+   fix it in both engines and rerun everything.
 3. **Investigate SAP's sign reversal.** The most interesting open question. A
    second cross-listed name on a second day would establish whether it is a
    property of cross-listing or of that one symbol-day.
-4. **Build the remaining Plan 4 failure tests**, in order of what could
-   invalidate most: latency sweep, impact stress, cross-regime generalisation.
-   Known-bias injection is done. Its unresolved half — why hopeless-queue
-   cancellation does not reverse the measured sign on synthetic data — needs an
-   injection that removes an order from the risk set without removing depth
-   from the book.
-5. **Implement the other three L2 heuristics**, which turns H4 from a one-sided
-   bound into a range.
-6. **Plan 3's missing estimators**: cause-specific Cox, Fine–Gray, IPCW policy
+4. **Build the impact stress test**, the last missing Plan 4 failure test.
+   Known-bias injection's unresolved half — why hopeless-queue cancellation
+   does not reverse the measured sign on synthetic data — needs an injection
+   that removes an order from the risk set without removing depth from the
+   book.
+5. **Plan 3's missing estimators**: cause-specific Cox, Fine–Gray, IPCW policy
    re-targeting, dependent-censoring bounds.
 
 ---
@@ -528,15 +543,14 @@ committed; the Parquet outputs are not.
 
 ## 11. Work in progress and pending
 
-**Nothing is currently running.** No background job, no partial write, no
-uncommitted change. `git status` is clean at `0ffa8a5`.
+**Nothing is currently running.** No background job and no partial write.
+`main` is in sync with `origin/main`.
 
 **Pending, in the sense of started-and-not-finished:** nothing. Every
 experiment listed above completed and wrote its manifest.
 
 **Pending, in the sense of owed:**
 
-- `0ffa8a5` is unpushed to `origin/main`.
 - `plan-2a-recorder` remains parked and unmerged, by decision.
 - The two `needs_lobster` definition-of-done items remain unchecked, by
   external blockage.

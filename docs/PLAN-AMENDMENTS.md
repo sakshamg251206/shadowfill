@@ -921,3 +921,30 @@ first version fed bash arithmetic the scientific notation macOS `seq` prints
 past ~1e6; the append guard left the prefix untouched, and offsets now go
 through `seq -f '%.0f'`. The file completed at 5,510,131,732 bytes, passed
 `gzip -t`, sha256 `7997025b9e09dd6c2ecb0bfa48a856197e6e800711ab67367ee0f2ab724b9ba8`.
+
+### AF. Amendment S resolved, and a known gap in the engine recorded
+
+**Date:** 2026-10-01.
+
+**S, resolved.** mypy no longer pins `python_version`, so it checks against
+the interpreter it runs under and stops parsing numpy's 3.12-syntax stubs as
+3.11 code. The cap-or-test choice S left open went to *test*: CI now runs the
+suite on 3.11 against the lock and on 3.12 and 3.13 against the latest
+releases inside the declared ranges. Before the change was made, lint and the
+full suite were run on 3.12 and 3.13 locally with numpy 2.5.3 and pyarrow
+25.0.1, and both were clean.
+
+**Found: trade-through fills are not credited.** The engine matches an
+execution against a shadow only at the shadow's own price. A shadow left alone
+at a price the visible book has emptied, and then traded through by an
+aggressor reaching a worse price, would have been hit first under price
+priority; the engine leaves it unfilled. The effect can only lower the computed
+truth, so measured understatements are conservative on this account. It is not
+fixed here because every committed manifest was produced under the current
+semantics: a fix without a rerun would leave the repository's numbers
+describing an engine it no longer contains. Pinned by the strict `xfail`
+`test_a_trade_through_a_better_priced_shadow_fills_it`; cost and plan in
+`docs/IDEAS.md`.
+
+**Layout.** Plans and specs moved from a nested tooling directory to
+`docs/plans/` and `docs/specs/`. Their content is unchanged apart from paths.
