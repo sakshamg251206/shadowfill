@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from shadowfill.events import EVENT_DTYPE, EventType, Side
 from shadowfill.replay import Placement, Status, run_reference
@@ -173,6 +174,32 @@ def test_events_at_other_prices_and_sides_are_ignored():
     )
     out = run_reference(events, [place(ts=0, price=100, side=Side.BID)])[0]
     assert out.ahead_at_end == 10
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Known limitation, documented in the README and docs/IDEAS.md: the engine "
+        "matches executions only at the shadow's own price, so a trade through a "
+        "better-priced shadow is missed. Fixing it changes every committed result, "
+        "so it must land together with a rerun. strict=True makes the fix visible."
+    ),
+)
+def test_a_trade_through_a_better_priced_shadow_fills_it():
+    # The only order at 100 is deleted, leaving the shadow alone at the best bid
+    # with nothing ahead. A sell that then executes at 99 had to pass through
+    # 100 first, so under price priority the shadow would have filled.
+    events = make_events(
+        [
+            (0, 1, 100, 30, EventType.ADD, Side.BID),
+            (1 * SEC, 2, 99, 50, EventType.ADD, Side.BID),
+            (2 * SEC, 1, 100, 30, EventType.DELETE, Side.BID),
+            (3 * SEC, 2, 99, 20, EventType.EXECUTE, Side.BID),
+        ]
+    )
+    out = run_reference(events, [place(ts=0, price=100, size=10)])[0]
+    assert out.ahead_at_end == 0
+    assert out.status == Status.FILLED
 
 
 def test_assumed_ahead_events_counts_unknown_id_cancels_that_moved_the_queue():
