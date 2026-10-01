@@ -201,8 +201,8 @@ make injection
 
 - **Ground-truth engine.** Exact queue-position accounting for hypothetical
   never-cancel orders over an order-by-order stream. Python oracle plus a C++20
-  engine (pybind11) held to identical output; roughly 900× faster than the
-  oracle on the benchmark slice.
+  engine (pybind11) held to identical output; several hundred times faster
+  than the oracle on the benchmark slice (CI gates at ≥ 200×).
 - **Data adapters.** Nasdaq TotalView-ITCH 5.0 (binary, free and public) and
   LOBSTER (CSV), both normalised into one canonical event schema. ITCH days are
   parsed once and materialised as partitioned Parquet.
