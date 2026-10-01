@@ -5,13 +5,38 @@ build-backend = "scikit_build_core.build"
 [project]
 name = "shadowfill"
 version = "0.1.0"
-description = "Counterfactual fill estimation from market-by-order data"
+description = "Ground-truth fill outcomes for hypothetical passive orders, computed from market-by-order data"
+readme = "README.md"
 requires-python = ">=3.11"
+authors = [{ name = "Saksham Garg" }]
+keywords = [
+    "market microstructure",
+    "limit order book",
+    "market-by-order",
+    "backtesting",
+    "survival analysis",
+    "queue position",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "Topic :: Scientific/Engineering",
+]
 dependencies = [
     "numpy>=1.26",
     "pandas>=2.2",
     "pyarrow>=16.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/sakshamg251206/shadowfill"
 
 [project.optional-dependencies]
 # Only needed to fetch Databento data. Kept out of the default install so CI,
@@ -19,8 +44,7 @@ dependencies = [
 data = ["databento>=0.34"]
 dev = [
     "pytest>=8.0",
-    "hypothesis>=6.100",
-    "ruff>=0.5",
+    "ruff>=0.16",
     "mypy>=1.10",
     "pandas-stubs>=2.2",
     "pre-commit>=3.7",
@@ -33,8 +57,6 @@ build-dir = "build/{wheel_tag}"
 
 # Gating on an explicit option rather than probing the filesystem means a path
 # typo is a hard CMake error instead of a silently-skipped extension module.
-# ON from Task 11, which is where src/shadowfill_bindings/module.cpp arrives
-# and the wheel finally has an extension module worth compiling the core for.
 [tool.scikit-build.cmake.define]
 SHADOWFILL_BUILD_CORE = "ON"
 
@@ -58,8 +80,10 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
 # package imports be merged into the numpy/pandas block.
 known-first-party = ["shadowfill"]
 
+# No python_version pin: mypy checks against the interpreter it runs under. A
+# pin to 3.11 made `make lint` fail on 3.12+ inside numpy's own stubs, which use
+# `type` statements (amendment S); CI now runs the matrix it advertises.
 [tool.mypy]
-python_version = "3.11"
 strict = true
 files = ["python/shadowfill"]
 

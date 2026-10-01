@@ -70,7 +70,7 @@ Violating any of these silently invalidates the research. Treat them as load-bea
 
 ## Stack and commands
 
-Python 3.11, NumPy, pandas, pyarrow, pytest, Hypothesis.
+Python 3.11+, NumPy, pandas, pyarrow, pytest.
 C++20, CMake ≥ 3.24, pybind11, Catch2 v3, scikit-build-core.
 ruff, mypy, pre-commit, GitHub Actions.
 
