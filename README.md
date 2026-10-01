@@ -14,6 +14,11 @@ fill models that trading backtests rely on. On one full day of Apple stock on
 Nasdaq, the standard model says 16% of passive orders fill within a minute.
 The computed answer is 43%.
 
+![Share of passive AAPL orders filled within 100 ms, 1 s, 10 s and 60 s: computed truth 1.7%, 5.1%, 20.6%, 43.3%; Kaplan–Meier estimate 1.4%, 3.7%, 10.8%, 16.4%](docs/img/h1-aapl-2019-12-30.png)
+
+<sub>Generated from <code>results/h1-aapl-2019-12-30/manifest.json</code> by
+<code>scripts/plot_h1.py</code>; every number on it is read from that manifest.</sub>
+
 This is a measurement project. It proposes no trading strategy and claims no
 profit.
 
@@ -318,7 +323,7 @@ shadowfill/
 │   └── fixtures/                 committed synthetic event stream
 ├── benchmarks/                   throughput gate
 ├── configs/                      run configurations
-├── scripts/                      data download helpers
+├── scripts/                      data download helpers, README chart
 ├── results/                      one committed manifest.json per run
 └── docs/                         spec, results, decisions, amendments, plans
 ```
