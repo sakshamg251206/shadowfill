@@ -32,3 +32,12 @@ the old semantics, so the fix has to ship with a rerun of H1-H5 on the
 2019-12-30 session, and a cheaper first step is a diagnostic counter of how
 often a live shadow is traded through, which sizes the problem before paying for
 the fix.
+
+## Guard `fetch_itch_parallel.sh` against concurrent runs
+
+Two copies of the script running against one file share part-file names, and the
+size check cannot tell a complete part from one two writers have interleaved.
+This corrupted the 2019-03-27 download once (amendment AG). A `mkdir` lock on
+the parts directory, released on exit, would make a second run refuse to start.
+Not built: it is infrastructure outside the current plan. Until then, run one
+fetcher at a time and confirm no `xargs` or `curl` survives an interruption.

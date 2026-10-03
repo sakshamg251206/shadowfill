@@ -1,6 +1,6 @@
 # ShadowFill — Current Status
 
-**As of 2026-10-01.** This is a handoff document: it records
+**As of 2026-10-04.** This is a handoff document: it records
 where the project actually stands, including what is broken, unverified, or
 withdrawn. It is written to be read by someone with no memory of how any of it
 was arrived at.
@@ -8,8 +8,10 @@ was arrived at.
 Read alongside `RESEARCH-SPEC.md` (the hypotheses and evaluation design) and
 `PLAN-AMENDMENTS.md` (every deviation from plan and why) and `RESULTS.md`
 (every experiment in full). Sections 4 and 5 are the record of the 2026-09-24
-rerun of H1–H5; the IPCW, latency and three-heuristic H4 results that came
-after it are in `RESULTS.md` and amendments Z–AC.
+rerun of H1–H5 on 2019-12-30; the IPCW, latency and three-heuristic H4 results
+that came after it are in `RESULTS.md` and amendments Z–AC. The second session
+(2019-03-27), the cross-day transfer run and the decision not to bootstrap over
+two sessions are in §5.1, `RESULTS.md` and amendment AG.
 
 ---
 
@@ -55,16 +57,17 @@ This is a measurement project. It never claims PnL and no strategy is proposed.
 | | state |
 |---|---|
 | **Plan 1** — ground-truth engine | Built. 4 of 6 definition-of-done items pass; 2 are externally blocked (§7) |
-| **Plan 2** — data layer | Built on Nasdaq TotalView-ITCH. One session acquired and verified |
+| **Plan 2** — data layer | Built on Nasdaq TotalView-ITCH. **Two** sessions acquired, verified and materialised (2019-12-30, 2019-03-27) |
 | **Plan 3** — estimators + L2 ablation | Partly built. KM, Aalen–Johansen, matched comparison, block bootstrap, L2 ablation under three queue heuristics, and IPCW with baseline and time-varying covariates all exist. Cox, Fine–Gray, IPCW policy re-targeting, dependent-censoring bounds and the ML baseline do **not** |
-| **Plan 4** — failure tests + paper README | Placebo and known-bias injection built and gating CI. Latency sweep run on AAPL. Cross-book transfer built and tested, not yet run on real data. The impact stress test does not exist |
+| **Plan 4** — failure tests + paper README | Placebo and known-bias injection built and gating CI. Latency sweep run on AAPL. Cross-book transfer built, tested and **run across both sessions** (amendment AG). The impact stress test does not exist |
 
 **Concretely present:** 21 Python modules, 29 test files, 253 tests, a C++20
 engine with pybind11 bindings that agrees with the Python oracle byte-for-byte
-on real exchange data, and 8 committed result manifests.
+on real exchange data, and 14 committed result directories, each pinning a manifest.
 
 **Repository:** `https://github.com/sakshamg251206/shadowfill.git`.
-`main` is **in sync with `origin/main`**.
+`main` carries local, **unpushed** commits for the second-session work
+(see `git log origin/main..main`); nothing from it is on `origin` yet.
 
 **Parked:** branch `plan-2a-recorder` (not on `origin`) holds a complete, tested Coinbase L3
 recorder that has no venue to record from (amendment U). Deliberately unmerged:
@@ -92,7 +95,7 @@ size    3,524,013,057 bytes   (matches the advertised content-length exactly)
 sha256  ef03df46a27e6bda4dead017f84c2e3979df7211f02c7868b51d53fceb99c689
 ```
 
-### Validation status: fully verified
+### Validation status of the 2019-12-30 session: fully verified
 
 | check | result |
 |---|---|
@@ -112,10 +115,38 @@ raises immediately. 268 million clean messages is not a soft assurance.
 were **1,569 / 1,569 (100.00%)** on a 20 MB prefix. That is the measurement
 that established the project was viable on this source at all.
 
+### The second session acquired
+
+```
+file    data/itch/03272019.NASDAQ_ITCH50.gz
+size    5,510,131,732 bytes
+sha256  7997025b9e09dd6c2ecb0bfa48a856197e6e800711ab67367ee0f2ab724b9ba8
+```
+
+`gzip -t` passes; 422,264,305 messages; zero unresolved references, zero
+oversized removals, `truncated=False` on all six symbols. Events per symbol:
+AAPL 2,146,794, MSFT 2,291,059, INTC 1,508,273, CSCO 1,178,134, UN 719,644,
+SAP 480,371.
+
+**Provenance caveat.** The first assembled copy of this file was corrupt
+(`gzip -t` failed with a CRC error; sha256 `0cdaf47d…`). The most likely
+cause is two fetcher processes writing the same part files at once, which the
+script's size check does not catch (the damaged part was written while both
+were running; the later single-fetcher download was clean; not proven). One 8 MiB part (byte offset 243,269,632) differed from a
+fresh fetch of the same range in 763,931 bytes; it was replaced, the file was
+rescanned end to end with no framing anomaly, and `gzip -t` and the sha256 then
+matched the value recorded in amendment AE. The 2019-12-30 file was re-fetched
+with a single fetcher and matched its recorded sha256 first time. Detail in
+amendment AG.
+
 ### Materialised dataset
 
-`data/parquet/date=2019-12-30/symbol=<SYM>/events.parquet`, Hive-partitioned,
-with `manifest.json` per day pinning the input sha256 above.
+`data/parquet/date=<date>/symbol=<SYM>/events.parquet` for both dates,
+Hive-partitioned,
+with a `manifest.json` per day pinning that day's input sha256. The table is
+2019-12-30; 2019-03-27's counts are above. The AAPL file for 2019-12-30 was
+re-materialised on 2026-10-04 and hashes to `302d1302390e18f0…`, identical to
+the input hash pinned in the committed 2019-12-30 manifests.
 
 | symbol | events (full day) |
 |---|---|
@@ -145,10 +176,13 @@ and CI touches none of it.
 
 ## 4. Experiment status, H1 through H5
 
-All five ran on the same input: AAPL, 2019-12-30, regular hours 09:30–16:00 ET,
-1,581,219 events, 791,477 real orders each shadowed by a never-cancel
-hypothetical order, 13 half-hour bootstrap blocks, 200 replicates, seed 0, C++
-engine. H2 additionally ran across six symbols.
+All five ran on AAPL, 2019-12-30, regular hours 09:30–16:00 ET, 1,581,219
+events, 791,477 real orders each shadowed by a never-cancel hypothetical order,
+13 half-hour bootstrap blocks, 200 replicates, seed 0, C++ engine. H2
+additionally ran across six symbols. **All five were then rerun unchanged on
+AAPL, 2019-03-27** (2,097,418 events, 1,056,435 orders; §5.1). The verdicts
+below are the 12-30 verdicts; on 03-27 the direction of H1, H3, H4 and H5 is the
+same and H2 still fails, with one change to its SAP finding (§5.1).
 
 | | status | verdict |
 |---|---|---|
@@ -256,6 +290,43 @@ change which policy a desk would pick.
 
 ---
 
+### 5.1 The second session, 2019-03-27
+
+Same code, same parameters, same seed; only the input differs. Every number is
+in `results/*-2019-03-27/manifest.json`; the full tables are in `RESULTS.md`.
+The manifests carry a `-dirty` suffix on the commit hash: tracked files were
+unmodified, and the flag reflects untracked result directories written by the
+earlier steps of the same run (amendment AG).
+
+| AAPL, 60 s | 12-30 | 03-27 |
+|---|---|---|
+| H1 truth F* / KM / error | 0.4331 / 0.1644 / −0.2688 | 0.4909 / 0.1200 / **−0.3709** |
+| H3 error in expected edge | +0.056 bps | +0.072 bps |
+| H4 proportional guess at 1 s, excess fills | +25% | +36% |
+| H5 stakes understated by | 2.8× | 4.8× |
+| H5 inversions | 0 / 10 | 0 / 10 |
+
+- The sign and ordering of every H1, H3, H4 and H5 result repeats. Magnitudes
+  are all larger on 03-27 and the 60 s H1 intervals do not overlap. Two days
+  cannot say whether that difference is noise or regime.
+- **H2: SAP's reversal does not reappear.** On 03-27 SAP reads −0.0026 with
+  interval [−0.0217, +0.0295], which straddles zero. The other five names are
+  negative with intervals excluding zero. One reversal in two symbol-days leaves
+  the cross-listing question open (§7 item 13).
+- **There is no interval over days.** The spec's session-level bootstrap is
+  degenerate at two sessions; see amendment AG. Cross-day statements in this
+  repository are side-by-side point estimates.
+
+**Cross-day transfer** (`results/transfer-2019-12-30-2019-03-27`, twelve
+symbol-day books). A per-(horizon, queue-ahead stratum) calibration learned on
+one book and applied to another cuts the absolute error in 64% (336 / 528) of
+pair cases and in 10 of 12 same-symbol cross-day pairs at 60 s. It is not a
+fix: carried from 12-30 to 03-27 it under-corrects, carried the other way it
+over-corrects and flips the sign (AAPL +0.20, INTC +0.28), and on SAP the
+pooled calibration worsens the error on both days with intervals excluding zero.
+
+---
+
 ## 6. Tests and checks
 
 ### Passing
@@ -298,10 +369,14 @@ turns into one when the engine is fixed.
 
 ### Data
 
-1. **One session.** Every result is AAPL (or six symbols for H2) on
-   2019-12-30. The block bootstrap is **within-session only** — it resamples
-   half-hour blocks inside one day and says nothing about day-to-day variation.
-   `RESEARCH-SPEC.md` §6 specifies blocks over sessions, which needs more days.
+1. **Two sessions.** Results are AAPL (six symbols for H2 and transfer) on
+   2019-12-30 and 2019-03-27. The block bootstrap is **within-session only**: it
+   resamples half-hour blocks inside one day and says nothing about day-to-day
+   variation. `RESEARCH-SPEC.md` §6 specifies blocks over sessions, which with
+   two sessions is degenerate (three distinct resamples), so it is not
+   implemented as an interval (amendment AG). It needs materially more days —
+   in the order of ten, of which the source offers 15 — before a session-level
+   interval means anything.
 2. **One venue, one asset class.** No futures, no crypto, no non-US equities.
 3. **Survivorship** is not yet considered: the six symbols were chosen for
    liquidity and price spread, not sampled from a point-in-time universe.
@@ -339,8 +414,7 @@ turns into one when the engine is fixed.
     because events sharing a timestamp can activate a shadow on a neighbouring
     event. Pinned by test at >90% exact.
 11. **Plan 4's impact stress test does not exist.** The latency sweep has run
-    (amendment AA); cross-book transfer is built and tested but has no real-data
-    result yet (amendment AD). Known-bias injection exists (amendment Y) but
+    (amendment AA); cross-book transfer has now run on both sessions (amendment AG). Known-bias injection exists (amendment Y) but
     recovers only one of the two mechanisms H2 names.
 12. **Trade-through fills are not credited.** The engine matches an execution
     against a shadow only at the shadow's own price, so a shadow left alone at
@@ -352,11 +426,15 @@ turns into one when the engine is fixed.
 ### Open research questions
 
 13. **Why does SAP reverse sign?** Cross-listing and fragmented liquidity is
-    the obvious candidate. Untested. It is the most interesting open thread in
-    the project.
+    the obvious candidate. Untested. On 2019-03-27 SAP does not reverse (error
+    −0.0026, interval straddling zero), so the reversal is one of two
+    symbol-days. It is still the most interesting open thread in the project.
 14. **Does the tick-regime prediction hold over a wider range?** 0.35–2.10 bps
     may be too narrow to contain the regimes H2 is about.
-15. **Is the H1 bias stable across days and across regimes?** Unknown.
+15. **Is the H1 bias stable across days and across regimes?** Partly answered:
+    on two days its sign and the qualitative H3–H5 conclusions repeat, and its
+    size does not (AAPL 60 s error −0.269 and −0.371). Whether the spread is
+    noise, regime or tick is untested, and two days cannot say.
 16. **Would a correct competing-risks or IPCW estimator close the gap?**
     Aalen–Johansen answers a different question (fills under *their*
     cancellation policies). IPCW on queue position and order age removes 3% of
@@ -436,17 +514,17 @@ process on the same box, so runner speed divides out.
 
 In priority order.
 
-1. **Analyse the second session** and re-run H1–H5 on both. This is the
-   single highest-value action: it converts the within-session bootstrap into
-   the across-session one the spec pre-registered, and tests whether any
-   result is stable across days. The 2019-03-27 file has been fetched and
-   verified (amendment AE); it is not yet materialised in any committed result.
-   Run `shadowfill.transfer` across the two days at the same time.
+1. **Acquire more sessions** (the source offers 15; two are in hand). Two is
+   enough for a direction check and not for an interval over days. With
+   roughly ten, the session-level bootstrap `RESEARCH-SPEC.md` §6 specifies
+   becomes meaningful and can be implemented. Fetch with exactly one fetcher
+   process (amendment AG).
 2. **Size the trade-through gap** (§7 item 12) with a diagnostic counter, then
    fix it in both engines and rerun everything.
-3. **Investigate SAP's sign reversal.** The most interesting open question. A
-   second cross-listed name on a second day would establish whether it is a
-   property of cross-listing or of that one symbol-day.
+3. **Investigate SAP's sign reversal.** The most interesting open question.
+   The second day did not reproduce it, so it is not yet established as a
+   property of SAP, of cross-listing, or of one symbol-day; more sessions and
+   another cross-listed name are needed.
 4. **Build the impact stress test**, the last missing Plan 4 failure test.
    Known-bias injection's unresolved half — why hopeless-queue cancellation
    does not reverse the measured sign on synthetic data — needs an injection
@@ -482,6 +560,19 @@ gzip -t data/itch/12302019.NASDAQ_ITCH50.gz      # must pass before proceeding
 
 Expected: 3,524,013,057 bytes, sha256
 `ef03df46a27e6bda4dead017f84c2e3979df7211f02c7868b51d53fceb99c689`.
+
+**Fetch with exactly one fetcher process.** Two concurrent runs of the script
+share part-file names and corrupted `03272019` once (amendment AG). If a run is
+interrupted, confirm no `xargs` or `curl` from it remains before rerunning, then
+verify with `gzip -t` and the sha256 recorded here.
+
+Second session, same procedure:
+
+```bash
+./scripts/fetch_itch_parallel.sh 03272019.NASDAQ_ITCH50.gz data/itch 4 8
+gzip -t data/itch/03272019.NASDAQ_ITCH50.gz
+# sha256 7997025b9e09dd6c2ecb0bfa48a856197e6e800711ab67367ee0f2ab724b9ba8
+```
 
 ### Materialise
 
@@ -527,6 +618,21 @@ All default to regular trading hours (09:30–16:00 ET), matched placement, seed
 commit, input sha256, full config and seed. `results/*/manifest.json` is
 committed; the Parquet outputs are not.
 
+### The second session and the transfer run
+
+Materialise and run exactly as above with `03272019` / `2019-03-27`
+substituted, then:
+
+```bash
+# one --book per symbol per date, twelve in all (zsh does not word-split a
+# string of flags; build an array)
+python -m shadowfill.transfer \
+    --book AAPL@2019-12-30=data/parquet/date=2019-12-30/symbol=AAPL/events.parquet \
+    --book AAPL@2019-03-27=data/parquet/date=2019-03-27/symbol=AAPL/events.parquet \
+    ...  --out-dir results/transfer-2019-12-30-2019-03-27 \
+    --n-replicates 200 --seed 0
+```
+
 ### Runtimes on developer hardware
 
 | step | time |
@@ -544,13 +650,15 @@ committed; the Parquet outputs are not.
 ## 11. Work in progress and pending
 
 **Nothing is currently running.** No background job and no partial write.
-`main` is in sync with `origin/main`.
 
 **Pending, in the sense of started-and-not-finished:** nothing. Every
 experiment listed above completed and wrote its manifest.
 
 **Pending, in the sense of owed:**
 
+- `README.md` still describes a one-session repository and its headline
+  figures; it has not been updated for 2019-03-27 and was outside this task.
+- `fetch_itch_parallel.sh` has no concurrency guard (`docs/IDEAS.md`).
 - `plan-2a-recorder` remains parked and unmerged, by decision.
 - The two `needs_lobster` definition-of-done items remain unchecked, by
   external blockage.

@@ -948,3 +948,74 @@ describing an engine it no longer contains. Pinned by the strict `xfail`
 
 **Layout.** Plans and specs moved from a nested tooling directory to
 `docs/plans/` and `docs/specs/`. Their content is unchanged apart from paths.
+
+### AG. The second session, the transfer run, and a spec item not implemented (Plans 3, 4)
+
+**Date:** 2026-10-04.
+
+**Plan said:** CURRENT-STATUS §9 step 1 and RESEARCH-SPEC §6: materialise the
+2019-03-27 session, rerun H1–H5 on it, "change the bootstrap to resample across
+sessions as RESEARCH-SPEC §6 specifies", and run `shadowfill.transfer` across
+both days. Do not fix the trade-through gap.
+
+**Done.** 2019-03-27 materialised for AAPL, MSFT, INTC, CSCO, UN and SAP; H1–H5
+rerun on it with the same code and parameters as 2019-12-30
+(`results/*-2019-03-27/`); `shadowfill.transfer` run over all twelve
+symbol-day books (`results/transfer-2019-12-30-2019-03-27/`). Numbers are in
+`RESULTS.md`. The trade-through gap is untouched: no engine file was modified,
+so every 03-27 number has the same known one-sided bias as the 12-30 numbers.
+
+**Deviation 1 — the session-level bootstrap is not implemented as an interval.**
+RESEARCH-SPEC §6 specifies a block bootstrap over sessions. With n = 2 a
+resample of two sessions draws from {AA, AB, BB}: three distinct outcomes, and
+the replicate statistics take at most three values. Percentiles of that are not
+a confidence interval and would only look like one. The decision was put to the
+author and the answer was to keep the within-session block bootstrap for every
+interval, report each session's estimate side by side, and say so here. The
+code in `bias.py`, `experiment.py` and `transfer.py` is unchanged; the
+`bootstrap_scope` string in the 12-30 manifests ("within-session blocks only")
+remains accurate. The spec item stays open. The data source publishes 15 days;
+with roughly ten the resample has enough distinct outcomes to mean something,
+and that is the point at which to implement it. RESEARCH-SPEC §6 is not edited,
+since the requirement stands.
+
+**Finding 1 — the 03-27 file was first assembled corrupt.** The assembled
+5,510,131,732-byte file had the advertised length but failed `gzip -t` (CRC
+error) and had sha256 `0cdaf47d…`, not the `7997025b…` of amendment AE. The
+first fetch attempt stalled with idle parent shells and no `xargs`/`curl`
+under them; the restarts left two copies of `fetch_itch_parallel.sh` running
+against the same part files for more than two hours, and `.tmp` files were removed
+under one of them. The script's per-part size check catches truncation, not two
+writers. Localisation: the file was stream-inflated and its ITCH 2-byte
+length framing checked; the first framing break fell at compressed offset
+~234 MiB, in the 8 MiB part at byte 243,269,632, which had failed all eight
+attempts in the first run. That part differed from a fresh fetch in 763,931
+bytes in a single span (offsets 1,818,320–2,584,575 within the part). Replacing
+it and rescanning gave zero anomalies over 422,264,305 messages; then `gzip -t`
+passed and the sha256 matched AE exactly. The two-writers explanation fits the
+timing and the clean single-fetcher download of 2019-12-30 (sha256 `ef03df46…`,
+first time), but it was not isolated experimentally. The old bytes were kept
+only in the session scratchpad.
+
+**Finding 2 — result manifests carry `-dirty`.** All 03-27 manifests after the
+first record the commit as `3d7f684…-dirty`. `git status` showed only untracked
+result directories from the same run and no modified tracked file, so the code
+under test is `3d7f684` unchanged; the flag is produced by the run's own
+earlier outputs. Distinct from amendment AB (a commit made mid-run).
+
+**Verified before use.** The re-materialised 12-30 AAPL parquet hashes to
+`302d1302390e18f0…`, identical to the input hash in the committed 12-30
+manifests, so the 12-30 results are checkable against the data now on disk. The
+baseline suite was run first on 3.11: 245 passed, 1 xfailed, 7 deselected.
+
+**Result that changes a claim's standing.** On 03-27 SAP does not reverse sign
+(error −0.0026, interval [−0.0217, +0.0295]). The 12-30 reversal is not
+retracted — its manifest and interval stand — but it is now one reversal in two
+symbol-days and is no longer evidence of a stable property. CURRENT-STATUS §7
+item 13 is updated to say so.
+
+**Not claimed.** That the day-to-day differences in magnitude are noise or are
+regime; that the transfer correction works (it cuts absolute error in 64% of
+pair cases but overshoots and fails on SAP); that the fetch-script race is the
+proven cause. A concurrency guard for the script is recorded in `docs/IDEAS.md`
+and not built, as it is outside Plan 1's scope.
