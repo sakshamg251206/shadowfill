@@ -1,0 +1,95 @@
+{
+  "git_sha": "3d7f6842921510f743bc4d576dd59c95e0b47251-dirty",
+  "experiment": "H3-passive-edge",
+  "input_path": "data/parquet/date=2019-03-27/symbol=AAPL/events.parquet",
+  "input_format": "parquet",
+  "input_sha256": "85ebdd96f703c8422260d3ebf1be50a08c6d14c052b28bbd5f88a2c4e8465640",
+  "n_events": 2097418,
+  "n_placements": 1056435,
+  "environment": {
+    "python": "3.11.13",
+    "platform": "macOS-26.7-arm64-arm-64bit",
+    "numpy": "2.4.6",
+    "pandas": "3.0.6",
+    "pyarrow": "25.0.1",
+    "compiler": "clang 21.0.0 (clang-2100.3.34.2)"
+  },
+  "diagnostics": {
+    "unknown_order_assumed_ahead": 122,
+    "fifo_violations": 453,
+    "unknown_order_events": 189
+  },
+  "config": {
+    "horizon_ns": 60000000000,
+    "markout_ns": 1000000000,
+    "horizons_ns": [
+      100000000,
+      1000000000,
+      10000000000,
+      60000000000
+    ],
+    "window_ns": [
+      34200000000000,
+      57600000000000
+    ],
+    "block_ns": 1800000000000,
+    "n_replicates": 200,
+    "n_blocks": 13,
+    "seed": 0,
+    "engine": "cpp"
+  },
+  "rows": [
+    {
+      "horizon_ns": 100000000,
+      "markout_ns": 1000000000,
+      "true_fill_rate": 0.018876765738131573,
+      "true_markout_bps": -0.03930494567719211,
+      "true_edge_bps": -0.0007419502518983427,
+      "est_fill_rate": 0.015154327346475926,
+      "est_markout_bps": -0.044741502451076165,
+      "est_edge_bps": -0.0006780273741167632,
+      "edge_error_bps": 6.392287778157952e-05,
+      "edge_error_lo": -8.894107815622853e-05,
+      "edge_error_hi": 0.0002593594833153228
+    },
+    {
+      "horizon_ns": 1000000000,
+      "markout_ns": 1000000000,
+      "true_fill_rate": 0.06108655538013419,
+      "true_markout_bps": -0.15556992698753144,
+      "true_edge_bps": -0.009503230960407272,
+      "est_fill_rate": 0.04072999228091456,
+      "est_markout_bps": -0.15545378238144267,
+      "est_edge_bps": -0.006331631356435132,
+      "edge_error_bps": 0.0031715996039721403,
+      "edge_error_lo": 0.0018072075881861416,
+      "edge_error_hi": 0.004561195759021945
+    },
+    {
+      "horizon_ns": 10000000000,
+      "markout_ns": 1000000000,
+      "true_fill_rate": 0.24662341077016758,
+      "true_markout_bps": -0.18734660774848735,
+      "true_edge_bps": -0.04620405939915266,
+      "est_fill_rate": 0.088237754242246,
+      "est_markout_bps": -0.19477375884155668,
+      "est_edge_bps": -0.017186399065499767,
+      "edge_error_bps": 0.029017660333652894,
+      "edge_error_lo": 0.023258146001572534,
+      "edge_error_hi": 0.033628836860443635
+    },
+    {
+      "horizon_ns": 60000000000,
+      "markout_ns": 1000000000,
+      "true_fill_rate": 0.49089884756418445,
+      "true_markout_bps": -0.19540098202340384,
+      "true_edge_bps": -0.09592211688819886,
+      "est_fill_rate": 0.12004799900567253,
+      "est_markout_bps": -0.19849280130239236,
+      "est_edge_bps": -0.023828663613382754,
+      "edge_error_bps": 0.07209345327481612,
+      "edge_error_lo": 0.06301015784427895,
+      "edge_error_hi": 0.07957522422538064
+    }
+  ]
+}
