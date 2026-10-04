@@ -589,7 +589,12 @@ an execution against a shadow only at the shadow's own price. If the real
 orders at that price are cancelled and an aggressor then trades through to a
 worse price, the shadow -- which would have been first in line -- is not
 filled. This can only *lower* the computed truth, so it makes the measured
-understatements conservative. How often it happens has not been measured. It
+understatements conservative. **It is large.** Measured without changing the
+engine (amendment AH), crediting trade-throughs would raise AAPL's
+never-cancel 60 s fill rate from 0.433 to about 0.553 on 2019-12-30 and from
+0.491 to about 0.595 on 2019-03-27 -- roughly 23% of shadows get an earlier
+fill. The H1 understatement would grow from −0.27 to about −0.39 at 60 s. These
+are point estimates without intervals, and H3–H5 have not been recomputed. It
 is pinned by a strict `xfail` test and written up in
 [docs/IDEAS.md](docs/IDEAS.md); fixing it changes every committed number, so
 the fix must ship with a rerun.

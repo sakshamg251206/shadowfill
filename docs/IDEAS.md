@@ -17,7 +17,18 @@ level the visible book no longer has.
 never-cancel fill rate is therefore a lower bound on what the stated
 assumptions imply, and a reported Kaplan-Meier *understatement* is, on this
 account alone, a lower bound on the true one. It shrinks a positive error such
-as SAP's in H2. How much any of this moves is not measured.
+as SAP's in H2.
+
+**Size (amendment AH).** `shadowfill.tradethrough` measures it without
+touching either engine. Crediting it raises AAPL's 60 s F* by +0.120 on
+2019-12-30 and +0.104 on 2019-03-27, about 23% of shadows. Lower and upper
+bounds agree to 0.0003. This is the largest known error in the committed
+numbers.
+
+**A second route, not measured.** A shadow bid alone above the visible best bid
+would also be hit by a new sell order arriving at or below its price. Crediting
+that means treating the incoming order as executing rather than resting, which
+interacts with the no-impact assumption. It should be decided with the fix.
 
 **Pinned.** `tests/python/test_shadow_tracker.py::test_a_trade_through_a_better_priced_shadow_fills_it`
 is a strict `xfail`. When the engine is fixed it starts passing, strict mode

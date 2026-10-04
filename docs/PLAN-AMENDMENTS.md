@@ -1019,3 +1019,35 @@ regime; that the transfer correction works (it cuts absolute error in 64% of
 pair cases but overshoots and fails on SAP); that the fetch-script race is the
 proven cause. A concurrency guard for the script is recorded in `docs/IDEAS.md`
 and not built, as it is outside Plan 1's scope.
+
+### AH. The trade-through gap sized before it is fixed (Plan 1 engine, measured)
+
+**Date:** 2026-10-04.
+
+**Plan said:** CURRENT-STATUS §9 step 2 and `docs/IDEAS.md`: size the gap
+with a diagnostic counter, then fix it in both engines and rerun.
+
+**Built:** `shadowfill.tradethrough`, a measurement only. It reads the outcome
+columns the engines already produce and changes neither engine, so no
+committed result moves and the strict `xfail` still fails as it should.
+Executions counted are `EXECUTE` and `EXECUTE_HIDDEN` at a strictly worse price
+on the shadow's side, inside its live window (strict activation, inclusive
+expiry, strictly before its own first fill). Hidden executions count because
+the aggressor passed the shadow's price to reach them; nothing here consumes a
+visible queue, so invariant 1 is untouched.
+
+Two bounds. The lower bound credits only executions after `ahead_lt_1_ts`. The
+upper bound credits all. The search is a range-minimum sparse table with
+binary lifting, tested against a brute-force loop, and that test was confirmed
+to fail under a mutation of the skip comparison.
+
+**Result.** It is large. AAPL 60 s F* rises by +0.120 on 12-30 and by +0.104 on
+03-27; the bounds agree to 0.0003. A book replay of 300 randomly sampled
+credited AAPL 12-30 shadows found the real level empty at the shadow's price,
+and the best real price on its side already worse, in all 300. Full table in
+`RESULTS.md`; manifests in `results/tradethrough-*`.
+
+**Not done, by decision.** The fix itself. It changes both engines and
+invalidates every committed manifest, so it waits for an explicit go-ahead.
+A second missed-fill route, an opposite-side order arriving at or through a
+lone shadow's price, is identified but neither credited nor measured.

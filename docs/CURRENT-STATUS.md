@@ -419,9 +419,14 @@ turns into one when the engine is fixed.
 12. **Trade-through fills are not credited.** The engine matches an execution
     against a shadow only at the shadow's own price, so a shadow left alone at
     a better price than the level an aggressor trades through is not filled.
-    It can only lower the computed truth. Unmeasured; pinned by a strict
-    `xfail` and written up in `IDEAS.md`. Fixing it changes every committed
-    result, so it must ship with a rerun.
+    It can only lower the computed truth. **Sized on 2026-10-04 (amendment
+    AH) and large**: crediting it raises AAPL's 60 s F* by +0.120 (12-30) and
+    +0.104 (03-27), so the H1 understatement is about −0.39 and −0.47, not
+    −0.27 and −0.37. Checked on 300 sampled shadows against a book replay.
+    Not fixed; pinned by a strict `xfail`. A second missed-fill route, an
+    opposite-side order arriving at or through a lone shadow's price, is not
+    credited or measured either. Fixing it changes every committed result, so
+    it must ship with a rerun.
 
 ### Open research questions
 
@@ -519,8 +524,10 @@ In priority order.
    roughly ten, the session-level bootstrap `RESEARCH-SPEC.md` §6 specifies
    becomes meaningful and can be implemented. Fetch with exactly one fetcher
    process (amendment AG).
-2. **Size the trade-through gap** (§7 item 12) with a diagnostic counter, then
-   fix it in both engines and rerun everything.
+2. **Fix the trade-through gap** (§7 item 12) in both engines and rerun
+   everything. Sized (amendment AH): it moves AAPL's 60 s truth by about
+   +0.1, which makes it the largest known error in the committed numbers. The
+   opposite-side route should be decided at the same time.
 3. **Investigate SAP's sign reversal.** The most interesting open question.
    The second day did not reproduce it, so it is not yet established as a
    property of SAP, of cross-listing, or of one symbol-day; more sessions and
@@ -657,6 +664,8 @@ experiment listed above completed and wrote its manifest.
 **Pending, in the sense of owed:**
 
 - `fetch_itch_parallel.sh` has no concurrency guard (`docs/IDEAS.md`).
+- Every committed H1–H5 number predates crediting trade-throughs, which is
+  sized and is not small (§7 item 12).
 - `plan-2a-recorder` remains parked and unmerged, by decision.
 - The two `needs_lobster` definition-of-done items remain unchecked, by
   external blockage.

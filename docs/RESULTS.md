@@ -25,8 +25,10 @@ estimates and says no more than that.
 **Known gap.** The engine does not credit a shadow with a fill when an
 aggressor trades through its price to a worse one
 ([docs/IDEAS.md](IDEAS.md)). That can only lower the computed truth, so the
-understatements below are, on that account alone, lower bounds. Its size has
-not been measured.
+understatements below are, on that account alone, lower bounds. **It has now
+been sized and it is not small**: see
+[the trade-through gap](#the-trade-through-gap--sized-not-fixed). Every number
+on this page is still the engine's current output.
 
 ## Contents
 
@@ -37,6 +39,7 @@ not been measured.
 - [H5 — Does the correction change the decision?](#h5--does-the-correction-change-the-decision)
 - [A second session — 2019-03-27](#a-second-session--2019-03-27)
 - [Across both sessions — does the correction transfer?](#across-both-sessions--does-the-correction-transfer)
+- [The trade-through gap — sized, not fixed](#the-trade-through-gap--sized-not-fixed)
 - [Robustness — is it just latency?](#robustness--is-it-just-latency)
 - [Correction — can standard reweighting repair it?](#correction--can-standard-reweighting-repair-it)
 - [Validation — the test that nearly killed this](#validation--the-test-that-nearly-killed-this)
@@ -429,6 +432,57 @@ approach. Both would need more sessions.
         --book AAPL@2019-03-27=data/parquet/date=2019-03-27/symbol=AAPL/events.parquet \
         ...                                  # all twelve, --seed 0 --n-replicates 200 \
         --out-dir results/transfer-2019-12-30-2019-03-27
+
+## The trade-through gap — sized, not fixed
+
+Both engines credit a shadow with an execution only at its own price. When the
+real orders at that price are pulled and an aggressor then executes beyond it
+-- a sell hitting bids below a shadow bid -- the shadow was the best-priced
+order on its side and would have been filled first. `shadowfill.tradethrough`
+measures this from the engine's existing outcome columns, without changing
+either engine, as the earlier of the engine's first fill and the first
+`EXECUTE`/`EXECUTE_HIDDEN` on the shadow's side at a strictly worse price inside
+its live window.
+
+Two bounds. **Lower** credits only executions after the shadow's queue-ahead
+had reached zero, so nothing real was ahead of it at its price and any fixed
+engine must fill it. **All trade-throughs** credits every one. They agree to
+within 0.0003 everywhere, so the distinction does not matter here.
+
+Never-cancel F* at 60 s, matched placement, regular hours:
+
+| book | engine F* | trade-throughs credited | change | shadows with an earlier fill | KM | KM error, engine → credited |
+|---|---|---|---|---|---|---|
+| AAPL 12-30 | 0.4331 | 0.5530 | **+0.120** | 179,857 of 791,477 | 0.1644 | −0.269 → −0.389 |
+| AAPL 03-27 | 0.4909 | 0.5947 | **+0.104** | 240,080 of 1,056,435 | 0.1200 | −0.371 → −0.475 |
+| SAP 12-30 | 0.0725 | 0.0988 | +0.026 | 698 of 26,059 | 0.1532 | +0.081 → +0.054 |
+| SAP 03-27 | 0.0943 | 0.1835 | +0.089 | 11,184 of 111,987 | 0.0918 | −0.003 → −0.092 |
+
+The "credited" column is the lower bound; the shadow counts are lower-bound
+counts. KM errors use the committed Kaplan–Meier estimates and carry no
+interval.
+
+**Checked against the book, not just the arithmetic.** For 300 randomly drawn
+AAPL 12-30 shadows credited by the lower bound, the oracle's book was replayed
+to the credited event: in all 300 the real book held nothing at the shadow's
+price and the best real price on its side was already worse. These are real
+missed fills, not a windowing artefact.
+
+**What it changes.** The H1 understatement gets larger on AAPL, by about 45%
+on 12-30. SAP's 12-30 reversal shrinks from +0.081 to +0.054 without changing
+sign, and on 03-27 SAP becomes clearly negative. H3–H5 are not recomputed: the
+missed fills are exactly the picked-off ones, so their markouts are probably
+adverse and the edge figures could move in either direction. Only a rerun can
+say.
+
+**Still not the whole gap.** While a shadow bid sits alone above the visible
+best bid, a new *sell order* at or below its price would also have hit it.
+Neither the engine nor this measurement credits that, so even with every
+trade-through credited, F* is a lower bound.
+
+    python -m shadowfill.tradethrough \
+        --message-path data/parquet/date=2019-12-30/symbol=AAPL/events.parquet \
+        --out-dir results/tradethrough-aapl-2019-12-30
 
 ## Robustness — is it just latency?
 
