@@ -290,7 +290,8 @@ class RefShadowTracker:
 
     1. activate pending placements with ``effective_ts < ev.ts_ns``
     2. expire actives whose horizon elapsed before ``ev.ts_ns``
-    3. match the event against the remaining actives
+    3. match the event against the remaining actives, including any shadow
+       an execution at a worse price traded through
     4. harvest filled
     5. apply the event to the book
 
@@ -372,9 +373,45 @@ class RefShadowTracker:
             return True
         return order.seq < insert_seq
 
+    @staticmethod
+    def _fill(a: _Active, qty: int, ts_ns: int) -> None:
+        """Credit ``qty`` shares passed to the shadow, capped at what it still wants."""
+        p = a.placement
+        fill = min(qty, p.size - a.outcome.filled_qty)
+        if fill <= 0:
+            return
+        if a.outcome.filled_qty == 0:
+            a.outcome.first_fill_ts = ts_ns
+        a.outcome.filled_qty += fill
+        if a.outcome.filled_qty >= p.size:
+            a.outcome.full_fill_ts = ts_ns
+            a.outcome.status = int(Status.FILLED)
+            a.outcome.ahead_at_end = a.ahead
+
+    def _trade_through(self, ts_ns: int, price: int, size: int, side: int) -> None:
+        """Fill shadows an execution at a worse price had to pass to get there.
+
+        Price priority puts a bid at 100 ahead of every bid at 99, so a sell
+        that executed at 99 -- displayed or hidden -- passed every shadow bid
+        above 99 first. A shadow is credited only once nothing real is ahead of
+        it at its own price (``ahead == 0``): with real orders still there, the
+        data says the book itself was traded through, which is an anomaly, and
+        the shadow is not flattered with a fill they did not get. ``ahead`` is
+        never touched, so hidden executions still consume no visible queue.
+        """
+        for a in self._active:
+            p = a.placement
+            if p.side != side or a.ahead != 0:
+                continue
+            passed = p.price > price if side == Side.BID else p.price < price
+            if passed:
+                self._fill(a, size, ts_ns)
+
     def _match(
         self, ts_ns: int, order_id: int, price: int, size: int, etype: int, side: int
     ) -> None:
+        if etype in (EventType.EXECUTE, EventType.EXECUTE_HIDDEN):
+            self._trade_through(ts_ns, price, size, side)
         if etype not in (EventType.CANCEL_PARTIAL, EventType.DELETE, EventType.EXECUTE):
             return  # ADD is behind us; hidden/cross/halt touch no visible queue
         for a in self._active:
@@ -408,19 +445,8 @@ class RefShadowTracker:
             a.ahead -= consumed
             record_crossings(a.outcome, a.ahead, ts_ns)
             residual = size - consumed
-            if residual <= 0:
-                continue
-            remaining = p.size - a.outcome.filled_qty
-            fill = min(residual, remaining)
-            if fill <= 0:
-                continue
-            if a.outcome.filled_qty == 0:
-                a.outcome.first_fill_ts = ts_ns
-            a.outcome.filled_qty += fill
-            if a.outcome.filled_qty >= p.size:
-                a.outcome.full_fill_ts = ts_ns
-                a.outcome.status = int(Status.FILLED)
-                a.outcome.ahead_at_end = a.ahead
+            if residual > 0:
+                self._fill(a, residual, ts_ns)
 
     def _harvest_filled(self) -> None:
         still: list[_Active] = []

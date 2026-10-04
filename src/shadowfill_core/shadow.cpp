@@ -62,6 +62,7 @@ void ShadowTracker::activate(std::int64_t now_ts, std::uint64_t now_seq) {
     actives_.push_back(Active{p, o, o.ahead_at_insert, expiry, false});
     by_level_[level_key(p.side, p.price)].push_back(index);
     expiries_.emplace(expiry, index);
+    note_front(index);
     ++next_;
   }
 }
@@ -90,7 +91,57 @@ bool ShadowTracker::is_ahead(std::uint64_t order_id,
   return static_cast<std::int64_t>(order->seq) < insert_seq;
 }
 
+bool ShadowTracker::credit(Active& a, std::int64_t qty, std::int64_t ts_ns) {
+  const std::int64_t fill =
+      std::min(qty, a.placement.size - a.outcome.filled_qty);
+  if (fill <= 0) return false;
+  if (a.outcome.filled_qty == 0) a.outcome.first_fill_ts = ts_ns;
+  a.outcome.filled_qty += fill;
+  if (a.outcome.filled_qty < a.placement.size) return false;
+  a.outcome.full_fill_ts = ts_ns;
+  a.outcome.status = Status::Filled;
+  a.outcome.ahead_at_end = a.ahead;
+  return true;
+}
+
+void ShadowTracker::note_front(std::size_t index) {
+  Active& a = actives_[index];
+  if (a.at_front || a.settled || a.ahead != 0) return;
+  a.at_front = true;
+  FrontIndex& front = a.placement.side == Side::Bid ? bid_front_ : ask_front_;
+  front[a.placement.price].push_back(index);
+}
+
+/// Price priority puts a bid at 100 ahead of every bid at 99, so an execution
+/// at 99 -- displayed or hidden -- passed every shadow bid above 99 first.
+/// Only shadows with nothing ahead are credited; replay.py::_trade_through
+/// documents why. `ahead` is never touched, so hidden executions still consume
+/// no visible queue.
+void ShadowTracker::trade_through(const Event& ev) {
+  FrontIndex& front = ev.side == Side::Bid ? bid_front_ : ask_front_;
+  auto level = ev.side == Side::Bid ? front.upper_bound(ev.price) : front.begin();
+  const auto last = ev.side == Side::Bid ? front.end() : front.lower_bound(ev.price);
+  while (level != last) {
+    std::vector<std::size_t>& indices = level->second;
+    std::size_t i = 0;
+    while (i < indices.size()) {
+      Active& a = actives_[indices[i]];
+      if (!a.settled && credit(a, ev.size, ev.ts_ns)) settle(indices[i]);
+      if (a.settled) {
+        indices[i] = indices.back();
+        indices.pop_back();
+        continue;
+      }
+      ++i;
+    }
+    level = indices.empty() ? front.erase(level) : std::next(level);
+  }
+}
+
 void ShadowTracker::match(const Event& ev) {
+  if (ev.type == EventType::Execute || ev.type == EventType::ExecuteHidden) {
+    trade_through(ev);
+  }
   // ADD is behind us; hidden/cross/halt touch no visible queue.
   if (!consumes_visible_queue(ev.type)) return;
 
@@ -119,6 +170,7 @@ void ShadowTracker::match(const Event& ev) {
             cancel_model_, ev.size, a.ahead,
             book_.level_size(ev.side, ev.price));
         record_crossings(a.outcome, a.ahead, ev.ts_ns);
+        note_front(indices[i]);
         ++i;
         continue;
       }
@@ -131,6 +183,7 @@ void ShadowTracker::match(const Event& ev) {
         }
         a.ahead = std::max<std::int64_t>(0, a.ahead - ev.size);
         record_crossings(a.outcome, a.ahead, ev.ts_ns);
+        note_front(indices[i]);
       }
       ++i;
       continue;
@@ -142,24 +195,14 @@ void ShadowTracker::match(const Event& ev) {
     const std::int64_t consumed = std::min(ev.size, a.ahead);
     a.ahead -= consumed;
     record_crossings(a.outcome, a.ahead, ev.ts_ns);
+    note_front(indices[i]);
     const std::int64_t residual = ev.size - consumed;
     if (residual <= 0) {
       ++i;
       continue;
     }
 
-    const std::int64_t remaining = a.placement.size - a.outcome.filled_qty;
-    const std::int64_t fill = std::min(residual, remaining);
-    if (fill <= 0) {
-      ++i;
-      continue;
-    }
-    if (a.outcome.filled_qty == 0) a.outcome.first_fill_ts = ev.ts_ns;
-    a.outcome.filled_qty += fill;
-    if (a.outcome.filled_qty >= a.placement.size) {
-      a.outcome.full_fill_ts = ev.ts_ns;
-      a.outcome.status = Status::Filled;
-      a.outcome.ahead_at_end = a.ahead;
+    if (credit(a, residual, ev.ts_ns)) {
       // A filled outcome is final, so it is settled here rather than in a
       // separate harvest pass over everything still live.
       settle(indices[i]);

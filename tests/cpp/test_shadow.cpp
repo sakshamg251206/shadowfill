@@ -190,3 +190,85 @@ TEST_CASE("thresholds already below at insert take the insert time") {
   REQUIRE(out[0].ahead_lt_10_ts == 1);
   REQUIRE(out[0].ahead_lt_1_ts == -1);
 }
+
+// Trade-through: an execution at a worse price on the shadow's side passed the
+// shadow first. Mirrors the trade-through tests in test_shadow_tracker.py.
+namespace {
+Placement place_at(std::int64_t price, Side side, std::int64_t horizon = 10 * kSec) {
+  return Placement{0, 0, 0, side, price, 10, horizon};
+}
+}  // namespace
+
+TEST_CASE("a trade-through fills a lone better-priced shadow") {
+  std::vector<Event> events{
+      {0, 0, 1, 100, 30, EventType::Add, Side::Bid},
+      {kSec, 1, 2, 99, 50, EventType::Add, Side::Bid},
+      {2 * kSec, 2, 1, 100, 30, EventType::Delete, Side::Bid},
+      {3 * kSec, 3, 2, 99, 20, EventType::Execute, Side::Bid},
+  };
+  auto out = run(events, {place_at(100, Side::Bid)});
+  REQUIRE(out[0].status == Status::Filled);
+  REQUIRE(out[0].first_fill_ts == 3 * kSec);
+  REQUIRE(out[0].ahead_at_end == 0);
+}
+
+TEST_CASE("a trade-through does not fill while real orders are still ahead") {
+  std::vector<Event> events{
+      {0, 0, 1, 100, 30, EventType::Add, Side::Bid},
+      {kSec, 1, 2, 99, 50, EventType::Add, Side::Bid},
+      {2 * kSec, 2, 2, 99, 20, EventType::Execute, Side::Bid},
+  };
+  auto out = run(events, {place_at(100, Side::Bid)});
+  REQUIRE(out[0].first_fill_ts == -1);
+  REQUIRE(out[0].ahead_at_end == 30);
+}
+
+TEST_CASE("a trade-through fills partially, then fully") {
+  std::vector<Event> events{
+      {0, 0, 1, 100, 30, EventType::Add, Side::Bid},
+      {kSec, 1, 2, 99, 50, EventType::Add, Side::Bid},
+      {2 * kSec, 2, 1, 100, 30, EventType::Delete, Side::Bid},
+      {3 * kSec, 3, 2, 99, 4, EventType::Execute, Side::Bid},
+      {4 * kSec, 4, 2, 99, 20, EventType::Execute, Side::Bid},
+  };
+  auto out = run(events, {place_at(100, Side::Bid)});
+  REQUIRE(out[0].first_fill_ts == 3 * kSec);
+  REQUIRE(out[0].full_fill_ts == 4 * kSec);
+  REQUIRE(out[0].filled_qty == 10);
+}
+
+TEST_CASE("a trade-through is mirrored on the ask side") {
+  std::vector<Event> events{
+      {0, 0, 1, 100, 30, EventType::Add, Side::Ask},
+      {kSec, 1, 2, 101, 50, EventType::Add, Side::Ask},
+      {2 * kSec, 2, 1, 100, 30, EventType::Delete, Side::Ask},
+      {3 * kSec, 3, 3, 99, 50, EventType::Add, Side::Ask},
+      {4 * kSec, 4, 3, 99, 20, EventType::Execute, Side::Ask},
+      {5 * kSec, 5, 2, 101, 20, EventType::Execute, Side::Ask},
+  };
+  auto out = run(events, {place_at(100, Side::Ask)});
+  REQUIRE(out[0].first_fill_ts == 5 * kSec);
+  REQUIRE(out[0].status == Status::Filled);
+}
+
+TEST_CASE("a hidden execution at a worse price trades through") {
+  std::vector<Event> events{
+      {0, 0, 1, 100, 30, EventType::Add, Side::Bid},
+      {kSec, 1, 1, 100, 30, EventType::Delete, Side::Bid},
+      {2 * kSec, 2, 0, 99, 20, EventType::ExecuteHidden, Side::Bid},
+  };
+  auto out = run(events, {place_at(100, Side::Bid)});
+  REQUIRE(out[0].first_fill_ts == 2 * kSec);
+  REQUIRE(out[0].status == Status::Filled);
+}
+
+TEST_CASE("a trade-through after expiry does nothing") {
+  std::vector<Event> events{
+      {0, 0, 1, 100, 30, EventType::Add, Side::Bid},
+      {kSec, 1, 1, 100, 30, EventType::Delete, Side::Bid},
+      {5 * kSec, 2, 2, 99, 20, EventType::Execute, Side::Bid},
+  };
+  auto out = run(events, {place_at(100, Side::Bid, 2 * kSec)});
+  REQUIRE(out[0].status == Status::Expired);
+  REQUIRE(out[0].first_fill_ts == -1);
+}

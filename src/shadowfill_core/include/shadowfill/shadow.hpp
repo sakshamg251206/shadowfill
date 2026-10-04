@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <deque>
 #include <queue>
+#include <map>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -118,6 +119,7 @@ class ShadowTracker {
     std::int64_t ahead;
     std::int64_t expiry_ts;
     bool settled = false;
+    bool at_front = false;  // indexed in bid_front_/ask_front_
   };
 
   /// One bucket per (side, price). An event can only touch shadows resting at
@@ -131,6 +133,11 @@ class ShadowTracker {
   void activate(std::int64_t now_ts, std::uint64_t now_seq);
   void expire(std::int64_t now_ts);
   void match(const Event& ev);
+  void trade_through(const Event& ev);
+  /// Index a shadow for trade-through matching once nothing is ahead of it.
+  void note_front(std::size_t index);
+  /// Credit `qty` passed to the shadow; true once it is completely filled.
+  static bool credit(Active& a, std::int64_t qty, std::int64_t ts_ns);
   [[nodiscard]] bool is_ahead(std::uint64_t order_id,
                               std::int64_t insert_seq) const;
   void settle(std::size_t index);
@@ -147,6 +154,15 @@ class ShadowTracker {
   // recycle settled slots via a free list if a run ever outgrows that.
   std::deque<Active> actives_;
   std::unordered_map<std::uint64_t, std::vector<std::size_t>> by_level_;
+  // Shadows with nothing ahead of them -- the only ones a trade-through can
+  // fill -- by price, per side, so an execution finds every one it passed with
+  // one bound lookup. `ahead` never rises, so a shadow enters once and leaves
+  // when settled. Indexing every live shadow instead cost a 3.5x slowdown on
+  // the benchmark: shadows with real orders still ahead were rescanned on
+  // every execution at a worse price without ever being fillable.
+  using FrontIndex = std::map<std::int64_t, std::vector<std::size_t>>;
+  FrontIndex bid_front_;
+  FrontIndex ask_front_;
 
   using Expiry = std::pair<std::int64_t, std::size_t>;
   std::priority_queue<Expiry, std::vector<Expiry>, std::greater<>> expiries_;

@@ -132,15 +132,31 @@ def _columns(outcomes):
 
 
 def test_credit_on_the_xfail_scenario_moves_the_shadow_to_filled_in_both_bounds():
+    # Outcome columns as an engine that misses trade-throughs reports them:
+    # activated at 0, front of its level from 2 s (the delete), never filled.
+    events = make_events(XFAIL_SCENARIO)
+    placement = Placement(0, 0, 0, int(Side.BID), 100, 10, 10 * SEC)
+    cols = {
+        "status": np.array([int(Status.EXPIRED)]),
+        "insert_ts": np.array([0]),
+        "first_fill_ts": np.array([-1]),
+        "ahead_lt_1_ts": np.array([2 * SEC]),
+    }
+    for require_front in (False, True):
+        credited = credited_first_fill(events, [placement], cols, require_front=require_front)
+        assert credited[0] == 3 * SEC
+
+
+def test_nothing_is_left_to_credit_once_the_engine_fills_trade_throughs():
+    # The engine now fills this shadow at 3 s itself, so the measurement's
+    # window closes before then and the lower bound credits nothing new.
     events = make_events(XFAIL_SCENARIO)
     placement = Placement(0, 0, 0, int(Side.BID), 100, 10, 10 * SEC)
     outcomes, _ = replay_reference(events, [placement])
     cols = _columns(outcomes)
-    assert cols["first_fill_ts"][0] == -1  # what the engine does today
-
-    for require_front in (False, True):
-        credited = credited_first_fill(events, [placement], cols, require_front=require_front)
-        assert credited[0] == 3 * SEC
+    assert cols["first_fill_ts"][0] == 3 * SEC
+    credited = credited_first_fill(events, [placement], cols, require_front=True)
+    assert credited[0] == 3 * SEC
 
 
 def test_lower_bound_ignores_a_trade_through_while_real_orders_are_still_ahead():

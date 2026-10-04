@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from shadowfill.events import EVENT_DTYPE, EventType, Side
 from shadowfill.replay import Placement, Status, run_reference
@@ -176,15 +175,6 @@ def test_events_at_other_prices_and_sides_are_ignored():
     assert out.ahead_at_end == 10
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Known limitation, documented in the README and docs/IDEAS.md: the engine "
-        "matches executions only at the shadow's own price, so a trade through a "
-        "better-priced shadow is missed. Fixing it changes every committed result, "
-        "so it must land together with a rerun. strict=True makes the fix visible."
-    ),
-)
 def test_a_trade_through_a_better_priced_shadow_fills_it():
     # The only order at 100 is deleted, leaving the shadow alone at the best bid
     # with nothing ahead. A sell that then executes at 99 had to pass through
@@ -200,6 +190,84 @@ def test_a_trade_through_a_better_priced_shadow_fills_it():
     out = run_reference(events, [place(ts=0, price=100, size=10)])[0]
     assert out.ahead_at_end == 0
     assert out.status == Status.FILLED
+
+
+def test_trade_through_does_not_fill_while_real_orders_are_still_ahead():
+    # The bid at 100 is still resting ahead of the shadow when a sell executes
+    # at 99, so the book itself was traded through. That is an anomaly in the
+    # data, and the shadow, behind a real order, is not flattered with a fill.
+    events = make_events(
+        [
+            (0, 1, 100, 30, EventType.ADD, Side.BID),
+            (1 * SEC, 2, 99, 50, EventType.ADD, Side.BID),
+            (2 * SEC, 2, 99, 20, EventType.EXECUTE, Side.BID),
+        ]
+    )
+    out = run_reference(events, [place(ts=0, price=100, size=10, horizon=10 * SEC)])[0]
+    assert out.first_fill_ts == -1
+    assert out.ahead_at_end == 30
+
+
+def test_trade_through_fills_partially_then_fully():
+    events = make_events(
+        [
+            (0, 1, 100, 30, EventType.ADD, Side.BID),
+            (1 * SEC, 2, 99, 50, EventType.ADD, Side.BID),
+            (2 * SEC, 1, 100, 30, EventType.DELETE, Side.BID),
+            (3 * SEC, 2, 99, 4, EventType.EXECUTE, Side.BID),
+            (4 * SEC, 2, 99, 20, EventType.EXECUTE, Side.BID),
+        ]
+    )
+    out = run_reference(events, [place(ts=0, price=100, size=10)])[0]
+    assert out.first_fill_ts == 3 * SEC
+    assert out.full_fill_ts == 4 * SEC
+    assert out.filled_qty == 10
+    assert out.status == Status.FILLED
+
+
+def test_trade_through_is_mirrored_on_the_ask_side():
+    events = make_events(
+        [
+            (0, 1, 100, 30, EventType.ADD, Side.ASK),
+            (1 * SEC, 2, 101, 50, EventType.ADD, Side.ASK),
+            (2 * SEC, 1, 100, 30, EventType.DELETE, Side.ASK),
+            (3 * SEC, 2, 99, 50, EventType.ADD, Side.ASK),  # better than the shadow
+            (4 * SEC, 3, 99, 20, EventType.EXECUTE, Side.ASK),  # not a trade-through
+            (5 * SEC, 2, 101, 20, EventType.EXECUTE, Side.ASK),  # passes 100
+        ]
+    )
+    out = run_reference(events, [place(ts=0, price=100, size=10, side=Side.ASK)])[0]
+    assert out.first_fill_ts == 5 * SEC
+    assert out.status == Status.FILLED
+
+
+def test_hidden_execution_at_a_worse_price_trades_through_without_touching_the_queue():
+    # The aggressor passed 100 to reach a hidden bid at 99, so the lone shadow
+    # at 100 fills. Invariant 1 is untouched: nothing visible is consumed.
+    events = make_events(
+        [
+            (0, 1, 100, 30, EventType.ADD, Side.BID),
+            (1 * SEC, 1, 100, 30, EventType.DELETE, Side.BID),
+            (2 * SEC, 0, 99, 20, EventType.EXECUTE_HIDDEN, Side.BID),
+        ]
+    )
+    out = run_reference(events, [place(ts=0, price=100, size=10)])[0]
+    assert out.first_fill_ts == 2 * SEC
+    assert out.status == Status.FILLED
+    assert out.ahead_at_end == 0
+
+
+def test_trade_through_after_expiry_does_nothing():
+    events = make_events(
+        [
+            (0, 1, 100, 30, EventType.ADD, Side.BID),
+            (1 * SEC, 1, 100, 30, EventType.DELETE, Side.BID),
+            (5 * SEC, 2, 99, 20, EventType.EXECUTE, Side.BID),
+        ]
+    )
+    out = run_reference(events, [place(ts=0, price=100, size=10, horizon=2 * SEC)])[0]
+    assert out.status == Status.EXPIRED
+    assert out.first_fill_ts == -1
 
 
 def test_assumed_ahead_events_counts_unknown_id_cancels_that_moved_the_queue():
