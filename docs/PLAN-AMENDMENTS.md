@@ -1051,3 +1051,72 @@ and the best real price on its side already worse, in all 300. Full table in
 invalidates every committed manifest, so it waits for an explicit go-ahead.
 A second missed-fill route, an opposite-side order arriving at or through a
 lone shadow's price, is identified but neither credited nor measured.
+
+### AI. Trade-throughs credited in both engines, and everything rerun (Plan 1 engine)
+
+**Date:** 2026-10-04.
+
+**Plan said:** CURRENT-STATUS §9 step 2: fix the trade-through gap sized in
+amendment AH, in both engines, and rerun everything.
+
+**Semantics.** An `EXECUTE` or `EXECUTE_HIDDEN` on a shadow's side at a
+strictly worse price credits `min(size, remaining)` to it, only when its
+queue-ahead is already 0. A shadow with real orders still ahead is not credited,
+because then the data shows the book itself traded through. That is an anomaly,
+and the project's tie convention is never to flatter the hypothetical order.
+`ahead` is never changed by a trade-through, so invariants 1 and 3 hold without
+argument. Same-price behaviour, including hidden executions at the same price,
+is unchanged.
+
+**Order of work.** The Python oracle was changed first (invariant 5). The C++
+engine then disagreed with it on 14 synthetic equivalence cases until it was
+changed to match. The strict `xfail` became an ordinary test, alongside
+partial-fill, ask-side, hidden, still-ahead and post-expiry cases in both
+languages.
+
+**Performance, and a first version that failed the gate.** Indexing every live
+shadow by price read 148× over the reference on the benchmark, below the 200×
+gate. The baseline, measured on the same machine at the parent commit, was
+1,090–1,224×. Shadows with real orders ahead were being rescanned on every
+worse-priced execution without ever being fillable. Indexing only shadows whose
+`ahead` has reached 0 (`ahead` is monotone, so each enters once) reads
+258–310×. The C++ engine is still roughly a quarter slower on the calibration
+stream (3.0–4.2M vs 4.8–5.4M events/s). The ratio also fell because the
+reference got 2.5–3× faster, with fewer shadows staying live.
+
+**Verification beyond the tests.**
+- The engines agree field for field, diagnostics included, on a 15-minute AAPL
+  slice of real ITCH (55,804 shadows).
+- The fixed engine's 60 s F* on AAPL and SAP, both days, equals what amendment
+  AH predicted from the old engine's output.
+- The AH measurement, run on the new output, credits zero further shadows on
+  all four books (`results/tradethrough-*-after-fix`). That AH's upper bound
+  also drops to zero suggests its small excess over the lower bound came from
+  executions sharing a timestamp with the moment a shadow reached the front,
+  not from priority breaches.
+
+**Rerun.** Every result manifest was regenerated at `0ae5196` with outputs
+staged outside the repository, so every manifest is clean, unlike the `-dirty`
+ones in amendment AG. Kaplan–Meier, Aalen–Johansen and every engine diagnostic
+are unchanged; only the truth moved. Changed conclusions are in CURRENT-STATUS
+§8 and `RESULTS.md`:
+- H3's "markout unbiased" finding is retracted, since the missing fills were
+  the adversely selected ones.
+- H4 moves from supported to not supported.
+- H5's "stakes understated 2.8×" is retracted.
+- The latency sign flip moves from 1 s to 100 ms.
+
+**Numbers recomputed outside a manifest.** These come from tests or ad-hoc
+runs, and are recorded here so they are reproducible:
+- Placebo: −0.0001 / −0.0007 / −0.0037 at 100 ms / 1 s / 5 s. That is the
+  configuration of `tests/python/test_placebo.py`; the docs had labelled the
+  last horizon 10 s.
+- Injection at 5 s, seed 101, 60k events: −0.0037 / −0.0125 / −0.0284 /
+  −0.0474 at strengths 0 / 0.3 / 0.6 / 0.9.
+- IPCW recovery on injected streams: 13–26%. This was measured with `run_ipcw`
+  on the same streams, strengths 0.3–0.9, horizons 1 s and 5 s, 2 s blocks and
+  30 replicates. It replaces "17–74%" from amendment AC, whose procedure was
+  not recorded and could not be reproduced.
+
+**Not done.** The opposite-side route, a new order arriving at or through a lone
+shadow's price, is still neither credited nor measured (`docs/IDEAS.md`).

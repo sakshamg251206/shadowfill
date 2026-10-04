@@ -157,6 +157,10 @@ Each of these can kill a claim, which is the point.
 
 ## 9. Plan sequence
 
+*Status figures below were regenerated on 2026-10-04 after the engines began
+crediting trade-through fills (amendments AH, AI). The hypotheses above are
+unchanged.*
+
 1. **Plan 1 — ground-truth engine.** MBO reconstruction, exact queue arithmetic,
    never-cancel outcomes, C++/Python equivalence. *Built. Two definition-of-done
    items are externally blocked; see amendments T and V.1.*
@@ -177,8 +181,8 @@ Each of these can kill a claim, which is the point.
 
 | | state |
 |---|---|
-| H1 — the bias exists and is material | **supported** on one full session (AAPL, 791,477 matched orders). KM understates the 60s fill rate by 0.269, CI [−0.293, −0.225] |
-| H2 — the sign is regime-dependent | **not supported**. The sign *does* flip (SAP, +0.081, interval excludes zero) but not along the tick axis: SAP sits mid-range at 0.75 bps between two negatives. The distinguishing feature is cross-listing, not tick size |
-| H3 — adverse selection offsets it | **mechanism not supported**. The bps number exists (+0.056 bps error at 60s); the offset does not — markout gap 5% against a fill-rate gap of 2.6x, so the edge error is the fill-rate error priced |
-| H4 — the L2 penalty | measured on one session, for the cancel-from-front heuristic only |
-| H5 — decision relevance | **not supported**. Rankings do not invert (0/10 pairs) and the two methods agree on the best policy in 100% of bootstrap replicates. The estimator understates what the choice is worth by 2.8x, but would not lead a desk to a different policy |
+| H1 — the bias exists and is material | **supported** on two sessions (AAPL, 791,477 and 1,056,435 matched orders). KM understates the 60 s fill rate by 0.389, CI [−0.418, −0.337], on 2019-12-30 and by 0.475 on 2019-03-27 |
+| H2 — the sign is regime-dependent | **not supported**. The sign *does* flip (SAP 2019-12-30, +0.054, interval excludes zero) but not along the tick axis, and SAP is negative on 2019-03-27 (−0.092, interval excludes zero). Every other name is negative on both days |
+| H3 — adverse selection offsets it | **not supported**. The conditional markout *is* biased, but in the direction that compounds the fill-rate error: −0.415 vs −0.190 bps at 60 s. Edge error +0.199 bps (+0.255 on the second day) |
+| H4 — the L2 penalty | **not supported**. Three heuristics bracket the truth and the penalty is real (every interval excludes zero), but it is an order of magnitude below the H1 bias: front-model error 0.008 at 1 s against 0.039, 0.005 at 60 s against 0.389 |
+| H5 — decision relevance | **not supported**. Rankings do not invert (0/10 pairs on both days) and both methods pick the same best policy; fill-rate and markout errors nearly cancel in edge, so the estimator values the choice about right (0.046 vs 0.046 bps) |

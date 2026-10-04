@@ -3,46 +3,27 @@
 Things noticed while working that are outside the current plan. Each entry says
 what it is, why it matters, and what doing it would cost. Nothing here is built.
 
-## Trade-through fills are not credited to a shadow
+## Credit fills from orders arriving at a lone shadow's price
 
-**What.** The engine matches an execution against a shadow only when the two
-share a price and side. If the shadow is the best-priced order on its side and
-an aggressor trades *through* it -- a sell executing against bids at 99 while
-the shadow bids 100 -- the shadow is not filled, although under price priority
-it would have been hit first. The usual way to get there is for the real
-orders at the shadow's price to be cancelled, leaving the shadow alone at a
-level the visible book no longer has.
+**What.** Trade-throughs are credited since 2026-10-04: an aggressor executing
+beyond a lone shadow's price fills it (amendments AH, AI). A second route is
+not. While a shadow bid sits alone above the visible best bid, a new *sell
+order* that arrives at or below its price would have hit it on arrival, and in
+the data it rests instead. Neither engine credits that fill.
 
-**Direction.** It can only miss fills, never invent them. The computed
-never-cancel fill rate is therefore a lower bound on what the stated
-assumptions imply, and a reported Kaplan-Meier *understatement* is, on this
-account alone, a lower bound on the true one. It shrinks a positive error such
-as SAP's in H2.
+**Direction.** It can only miss fills, so the computed truth is still a lower
+bound on what the stated assumptions imply, and measured understatements are
+conservative on this account.
 
-**Size (amendment AH).** `shadowfill.tradethrough` measures it without
-touching either engine. Crediting it raises AAPL's 60 s F* by +0.120 on
-2019-12-30 and +0.104 on 2019-03-27, about 23% of shadows. Lower and upper
-bounds agree to 0.0003. This is the largest known error in the committed
-numbers.
+**Why it is not simply added.** Crediting it means treating a real order as
+executing instead of resting, so the real book diverges from what it would have
+been. That leans harder on the no-impact assumption than a trade-through does,
+where the aggressor executed anyway.
 
-**A second route, not measured.** A shadow bid alone above the visible best bid
-would also be hit by a new sell order arriving at or below its price. Crediting
-that means treating the incoming order as executing rather than resting, which
-interacts with the no-impact assumption. It should be decided with the fix.
-
-**Pinned.** `tests/python/test_shadow_tracker.py::test_a_trade_through_a_better_priced_shadow_fills_it`
-is a strict `xfail`. When the engine is fixed it starts passing, strict mode
-turns that into a failure, and whoever fixed it is forced to update this entry
-and the README.
-
-**Cost of fixing.** Both engines change together. In the C++ engine shadows are
-bucketed by exact level, so a trade-through check needs an ordered index of
-live shadow prices per side rather than one hash lookup per event; the
-throughput gate has to be re-checked. Every committed manifest is produced by
-the old semantics, so the fix has to ship with a rerun of H1-H5 on the
-2019-12-30 session, and a cheaper first step is a diagnostic counter of how
-often a live shadow is traded through, which sizes the problem before paying for
-the fix.
+**Cost.** Measure first, as the trade-through gap was: extend
+`shadowfill.tradethrough` with the first opposite-side `ADD` priced at or
+through each lone shadow's price, and report how far F* would move. Decide from
+the size. A fix touches both engines and needs a full rerun again.
 
 ## Guard `fetch_itch_parallel.sh` against concurrent runs
 

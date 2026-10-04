@@ -1,14 +1,15 @@
-"""Size the trade-through gap before paying for a fix (docs/IDEAS.md).
+"""Measure trade-through fills an engine's outcomes do not credit.
 
-Both engines match an execution against a shadow only at the shadow's own
-price. Under price priority, though, an aggressor that executes at a *worse*
-price on the shadow's side -- a sell hitting bids below a shadow bid, a buy
-lifting asks above a shadow ask -- passed the shadow on the way and would have
-filled it. This module measures how often that happens to a live, still-unfilled
-shadow, and what crediting it would do to the never-cancel fill curve F*(h).
+Under price priority, an aggressor that executes at a *worse* price on a
+shadow's side -- a sell hitting bids below a shadow bid, a buy lifting asks
+above a shadow ask -- passed the shadow on the way and would have filled it.
+This module finds how often that happens to a live, still-unfilled shadow, and
+what crediting it would do to the never-cancel fill curve F*(h).
 
-It changes nothing about either engine or any committed result. It reads the
-outcome columns they already produce and reports two bounds on the fix:
+It sized the gap before the engines credited these fills (amendment AH, run
+against commit 0e2f0b8), and on the fixed engines it is a regression check:
+the lower bound must credit nothing (amendment AI). It only reads the outcome
+columns an engine produces, and reports two bounds:
 
 * **upper** -- every worse-priced execution in the shadow's live window counts.
   This includes moments when real orders at the shadow's own price were also

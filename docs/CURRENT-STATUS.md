@@ -7,11 +7,10 @@ was arrived at.
 
 Read alongside `RESEARCH-SPEC.md` (the hypotheses and evaluation design) and
 `PLAN-AMENDMENTS.md` (every deviation from plan and why) and `RESULTS.md`
-(every experiment in full). Sections 4 and 5 are the record of the 2026-09-24
-rerun of H1–H5 on 2019-12-30; the IPCW, latency and three-heuristic H4 results
-that came after it are in `RESULTS.md` and amendments Z–AC. The second session
-(2019-03-27), the cross-day transfer run and the decision not to bootstrap over
-two sessions are in §5.1, `RESULTS.md` and amendment AG.
+(every experiment in full). Sections 4 and 5 record the 2026-10-04 rerun of
+every experiment on both sessions, after the engines began crediting
+trade-through fills (amendments AH, AI); every committed result manifest was
+regenerated then, at commit `0ae5196`. What that rerun changed is in §8.
 
 ---
 
@@ -56,18 +55,20 @@ This is a measurement project. It never claims PnL and no strategy is proposed.
 
 | | state |
 |---|---|
-| **Plan 1** — ground-truth engine | Built. 4 of 6 definition-of-done items pass; 2 are externally blocked (§7) |
+| **Plan 1** — ground-truth engine | Built. 4 of 6 definition-of-done items pass; 2 are externally blocked (§7). Credits trade-through fills since 2026-10-04 (amendment AI) |
 | **Plan 2** — data layer | Built on Nasdaq TotalView-ITCH. **Two** sessions acquired, verified and materialised (2019-12-30, 2019-03-27) |
 | **Plan 3** — estimators + L2 ablation | Partly built. KM, Aalen–Johansen, matched comparison, block bootstrap, L2 ablation under three queue heuristics, and IPCW with baseline and time-varying covariates all exist. Cox, Fine–Gray, IPCW policy re-targeting, dependent-censoring bounds and the ML baseline do **not** |
 | **Plan 4** — failure tests + paper README | Placebo and known-bias injection built and gating CI. Latency sweep run on AAPL. Cross-book transfer built, tested and **run across both sessions** (amendment AG). The impact stress test does not exist |
 
-**Concretely present:** 21 Python modules, 29 test files, 253 tests, a C++20
+**Concretely present:** 22 Python modules, 30 test files, 268 tests, a C++20
 engine with pybind11 bindings that agrees with the Python oracle byte-for-byte
-on real exchange data, and 14 committed result directories, each pinning a manifest.
+on real exchange data, and 22 committed result directories, each pinning a
+manifest.
 
 **Repository:** `https://github.com/sakshamg251206/shadowfill.git`.
-`main` carries local, **unpushed** commits for the second-session work
-(see `git log origin/main..main`); nothing from it is on `origin` yet.
+`main` carries local, **unpushed** commits for the second session, the
+trade-through fix and the rerun (see `git log origin/main..main`); nothing from
+them is on `origin` yet.
 
 **Parked:** branch `plan-2a-recorder` (not on `origin`) holds a complete, tested Coinbase L3
 recorder that has no venue to record from (amendment U). Deliberately unmerged:
@@ -176,154 +177,136 @@ and CI touches none of it.
 
 ## 4. Experiment status, H1 through H5
 
-All five ran on AAPL, 2019-12-30, regular hours 09:30–16:00 ET, 1,581,219
-events, 791,477 real orders each shadowed by a never-cancel hypothetical order,
-13 half-hour bootstrap blocks, 200 replicates, seed 0, C++ engine. H2
-additionally ran across six symbols. **All five were then rerun unchanged on
-AAPL, 2019-03-27** (2,097,418 events, 1,056,435 orders; §5.1). The verdicts
-below are the 12-30 verdicts; on 03-27 the direction of H1, H3, H4 and H5 is the
-same and H2 still fails, with one change to its SAP finding (§5.1).
+Every experiment ran on AAPL, regular hours 09:30–16:00 ET, matched placement
+(one never-cancel shadow per real order), 13 half-hour bootstrap blocks, 200
+replicates (150 for H2), seed 0, C++ engine, on both sessions: 2019-12-30
+(1,581,219 events, 791,477 orders) and 2019-03-27 (2,097,418 events,
+1,056,435 orders). H2 and the transfer test use six symbols.
 
 | | status | verdict |
 |---|---|---|
-| **H1** the bias exists and is material | **Complete** | **Supported.** All intervals exclude zero |
-| **H2** the sign is regime-dependent | **Complete** | **Not supported.** The sign does flip, but not along the tick axis |
-| **H3** adverse selection offsets it | **Complete** | **Number delivered, mechanism not supported.** The offset does not appear |
-| **H4** the L2 penalty | **Complete** for front, proportional and back (amendment Z); uniform-over-orders needs an order count L2 does not carry | **Supported.** The three heuristics bracket the truth |
-| **H5** decision relevance | **Complete** | **Not supported.** Rankings do not invert |
+| **H1** the bias exists and is material | **Complete**, both days | **Supported.** All intervals exclude zero on both days |
+| **H2** the sign is regime-dependent | **Complete**, both days | **Not supported.** SAP flips sign on 12-30 only; the flip is not ordered by tick |
+| **H3** adverse selection offsets it | **Complete**, both days | **Not supported.** The markout *is* biased, but it compounds the fill-rate error |
+| **H4** the L2 penalty | **Complete** for front, proportional and back, both days | **Not supported.** The heuristics bracket the truth, but the penalty is an order of magnitude below H1 |
+| **H5** decision relevance | **Complete**, both days | **Not supported.** Rankings never invert |
 
-Three of five pre-registered claims came back negative. The headline effects
-they were meant to explain are large and significant.
+Four of five pre-registered claims came back negative. The headline effect they
+were meant to explain is large, significant and repeats on the second day.
 
 ---
 
 ## 5. Numerical results from the latest rerun
 
+AAPL, 2019-12-30, unless stated. Full tables for both days in `RESULTS.md`.
+
 ### H1 — never-cancel truth versus Kaplan–Meier
 
 | horizon | truth F* | KM | error | 95% CI |
 |---|---|---|---|---|
-| 100 ms | 0.0172 | 0.0140 | −0.0031 | [−0.0037, −0.0024] |
-| 1 s | 0.0506 | 0.0372 | −0.0134 | [−0.0172, −0.0082] |
-| 10 s | 0.2059 | 0.1085 | −0.0974 | [−0.1176, −0.0665] |
-| 60 s | 0.4331 | 0.1644 | **−0.2688** | [−0.2925, −0.2253] |
+| 100 ms | 0.0207 | 0.0140 | −0.0067 | [−0.0081, −0.0049] |
+| 1 s | 0.0760 | 0.0372 | −0.0387 | [−0.0494, −0.0244] |
+| 10 s | 0.3204 | 0.1085 | −0.2119 | [−0.2437, −0.1659] |
+| 60 s | 0.5531 | 0.1644 | **−0.3887** | [−0.4183, −0.3371] |
 
-A passive order at AAPL's touch that never cancels fills **43%** of the time
+A passive order at AAPL's touch that never cancels fills **55%** of the time
 within a minute. KM fitted on the real orders in the same book says **16%**.
+On 2019-03-27: **59%** against **12%**, error −0.4747 [−0.4818, −0.4533].
 
 **Mechanism.** By 60 s the risk set is almost entirely orders nobody bothered
-to pull, and nobody pulls an order that was never going to fill. The survivors
-are adversely selected for *not* filling and the estimator extrapolates their
-hazard to everyone.
+to pull, and nobody pulls an order that was never going to fill. Much of the gap
+is orders pulled just before the market moved through their price, which a
+never-cancel order is filled by and its pulled twin is not.
 
 Engine diagnostics: `unknown_order_assumed_ahead` 530, `fifo_violations` 686
-(0.043% of events), `unknown_order_events` 380. All expected on real data.
+(0.043% of events), `unknown_order_events` 380 — identical before and after the
+trade-through fix. All expected on real data.
 
 ### H2 — across tick regimes, 60 s horizon
 
-| symbol | price | tick (bps) | F* | KM | error | 95% CI |
-|---|---|---|---|---|---|---|
-| AAPL | 289.70 | 0.35 | 0.4331 | 0.1644 | −0.2688 | [−0.2922, −0.2236] |
-| MSFT | 157.75 | 0.63 | 0.4877 | 0.1332 | −0.3545 | [−0.3769, −0.3103] |
-| **SAP** | 133.33 | **0.75** | 0.0725 | 0.1532 | **+0.0806** | [+0.0678, +0.0961] |
-| INTC | 59.66 | 1.68 | 0.4071 | 0.1592 | −0.2479 | [−0.3028, −0.1640] |
-| UN | 57.82 | 1.73 | 0.1201 | 0.0406 | −0.0795 | [−0.0948, −0.0584] |
-| CSCO | 47.52 | 2.10 | 0.3234 | 0.1012 | −0.2222 | [−0.2682, −0.1337] |
+| symbol | tick (bps) | error 12-30 | 95% CI | error 03-27 | 95% CI |
+|---|---|---|---|---|---|
+| AAPL | 0.35 / 0.53 | −0.3887 | [−0.4169, −0.3378] | −0.4747 | [−0.4821, −0.4528] |
+| MSFT | 0.63 / 0.86 | −0.4073 | [−0.4368, −0.3564] | −0.5253 | [−0.5373, −0.5013] |
+| **SAP** | 0.75 / 0.88 | **+0.0544** | [+0.0424, +0.0702] | **−0.0918** | [−0.1314, −0.0259] |
+| INTC | 1.68 / 1.88 | −0.2696 | [−0.3298, −0.1786] | −0.4649 | [−0.4909, −0.4249] |
+| UN | 1.73 / 1.72 | −0.1327 | [−0.1520, −0.0944] | −0.1380 | [−0.1607, −0.1178] |
+| CSCO | 2.10 / 1.89 | −0.2425 | [−0.2931, −0.1490] | −0.4231 | [−0.4420, −0.3891] |
 
-SAP reverses sign with an interval well clear of zero. It sits mid-range at
-0.75 bps between two negatives, so the flip is **not** ordered by relative tick
-and the magnitude is not monotone in it either.
-
-The distinguishing feature of SAP and UN is cross-listing: they have the lowest
-ground-truth fill rates here, 0.07 and 0.12 against 0.32–0.49, because Nasdaq
-sees only a slice of their liquidity. **That is a candidate mechanism, not a
-finding** — this session cannot test it.
+SAP reverses on 12-30 and not on 03-27, both intervals clear of zero. Every
+other name is negative on both days. The flip is not ordered by relative tick.
+SAP and UN, the cross-listed names, have the lowest ground-truth fill rates on
+both days. **That is a candidate mechanism for their magnitude, not a finding.**
 
 ### H3 — error in expected passive edge, basis points
 
 | horizon | true edge | estimated edge | error | 95% CI |
 |---|---|---|---|---|
-| 100 ms | −0.000 | −0.000 | +0.000 | [−0.000, +0.000] |
-| 1 s | −0.005 | −0.004 | +0.001 | [−0.001, +0.003] |
-| 10 s | −0.039 | −0.020 | +0.019 | [+0.008, +0.030] |
-| 60 s | **−0.087** | **−0.031** | **+0.056** | [+0.033, +0.076] |
+| 100 ms | −0.002 | −0.000 | +0.002 | [+0.000, +0.004] |
+| 1 s | −0.022 | −0.004 | +0.018 | [+0.006, +0.028] |
+| 10 s | −0.137 | −0.020 | +0.117 | [+0.066, +0.161] |
+| 60 s | **−0.230** | **−0.031** | **+0.199** | [+0.126, +0.260] |
 
-Resting passively and never cancelling costs **0.087 bps** to adverse selection
-over a minute; the observational estimate says **0.031 bps**.
+Decomposed at 60 s: fill rate 0.5531 vs 0.1644 (3.4×); markout −0.415 vs
+−0.190 bps (2.2×). **The markout is biased, and in the direction that adds to
+the fill-rate error** — the fills the estimator never sees are the
+picked-off ones. On 03-27 the edge error is +0.255 bps.
 
-Decomposed at 60 s: the fill-rate gap is 0.4331 vs 0.1644 (a factor of 2.6);
-the markout gap is −0.200 vs −0.190 (5%). **The offsetting markout bias the
-hypothesis rests on is not there.** The entire edge error is the fill-rate
-error, priced.
+### H4 — the level-2 penalty
 
-### H4 — the level-2 penalty (cancel-from-front)
-
-| horizon | L3 truth | L2 guess | error | 95% CI |
+| horizon | L3 truth | front | proportional | back |
 |---|---|---|---|---|
-| 100 ms | 0.0172 | 0.0204 | +0.0032 | [+0.0026, +0.0036] |
-| 1 s | 0.0506 | 0.0655 | +0.0149 | [+0.0123, +0.0165] |
-| 10 s | 0.2059 | 0.2444 | +0.0385 | [+0.0352, +0.0411] |
-| 60 s | 0.4331 | 0.4664 | +0.0333 | [+0.0292, +0.0382] |
+| 1 s | 0.0760 | +0.0081 [+0.0073, +0.0091] | +0.0063 [+0.0056, +0.0068] | −0.0034 [−0.0042, −0.0028] |
+| 60 s | 0.5531 | +0.0053 [+0.0041, +0.0068] | +0.0041 [+0.0032, +0.0052] | −0.0038 [−0.0044, −0.0033] |
 
-At one second an L2 simulator promises **29% more fills than it gets** — the
-same order of magnitude as the cancellation bias, which is what H4 predicted.
-The two errors point in opposite directions, so an L2 backtest that also
-censors on cancellation gets a partial offset. That is luck, not correctness.
+The heuristics bracket the truth at every horizon on both days; proportional
+promises 8% more fills than it gets at 1 s (16% on 03-27). That is an order of
+magnitude below the H1 bias (0.039 at 1 s, 0.389 at 60 s), so H4's "same order
+of magnitude" prediction fails. Trade-through fills depend on price, not queue
+position, so L2 gets them right too.
 
 ### H5 — decision relevance
 
 | wait | F* | edge* (bps) | F̂ | edgê (bps) |
 |---|---|---|---|---|
-| 100 ms | 0.0172 | −0.5061 | 0.0140 | −0.5077 |
-| 1 s | 0.0506 | −0.4938 | 0.0372 | −0.4996 |
-| 5 s | 0.1396 | −0.4670 | 0.0830 | −0.4864 |
-| 30 s | 0.3382 | −0.4054 | 0.1421 | −0.4683 |
-| 60 s | 0.4331 | **−0.3786** | 0.1644 | **−0.4614** |
+| 100 ms | 0.0207 | −0.5062 | 0.0140 | −0.5077 |
+| 1 s | 0.0760 | −0.4976 | 0.0372 | −0.4996 |
+| 5 s | 0.2256 | −0.4904 | 0.0830 | −0.4864 |
+| 30 s | 0.4691 | −0.4691 | 0.1421 | −0.4683 |
+| 60 s | 0.5531 | **−0.4598** | 0.1644 | **−0.4614** |
 
-Crossing immediately costs 0.5147 bps. **Inversions 0 / 10 pairs.** Both
-methods pick 60 s, and they agree on the best policy in **100%** of bootstrap
-replicates.
+Crossing immediately costs 0.515 bps. **Inversions 0 / 10 pairs** on both days.
+Both methods pick 60 s; they disagree on the best policy in 15% of bootstrap
+replicates (6% on 03-27). Fill rate and markout errors nearly cancel in edge:
+both methods value the choice at 0.046 bps.
 
-Truth says the choice between best and worst policy is worth **0.128 bps**;
-the estimator says **0.046 bps** — understated **2.8×**, but not enough to
-change which policy a desk would pick.
-
----
-
-### 5.1 The second session, 2019-03-27
-
-Same code, same parameters, same seed; only the input differs. Every number is
-in `results/*-2019-03-27/manifest.json`; the full tables are in `RESULTS.md`.
-The manifests carry a `-dirty` suffix on the commit hash: tracked files were
-unmodified, and the flag reflects untracked result directories written by the
-earlier steps of the same run (amendment AG).
+### 5.1 Across the two sessions
 
 | AAPL, 60 s | 12-30 | 03-27 |
 |---|---|---|
-| H1 truth F* / KM / error | 0.4331 / 0.1644 / −0.2688 | 0.4909 / 0.1200 / **−0.3709** |
-| H3 error in expected edge | +0.056 bps | +0.072 bps |
-| H4 proportional guess at 1 s, excess fills | +25% | +36% |
-| H5 stakes understated by | 2.8× | 4.8× |
+| H1 truth F* / KM / error | 0.5531 / 0.1644 / −0.3887 | 0.5947 / 0.1200 / **−0.4747** |
+| H3 error in expected edge | +0.199 bps | +0.255 bps |
+| H4 proportional guess at 1 s, excess fills | +8% | +16% |
 | H5 inversions | 0 / 10 | 0 / 10 |
 
-- The sign and ordering of every H1, H3, H4 and H5 result repeats. Magnitudes
-  are all larger on 03-27 and the 60 s H1 intervals do not overlap. Two days
-  cannot say whether that difference is noise or regime.
-- **H2: SAP's reversal does not reappear.** On 03-27 SAP reads −0.0026 with
-  interval [−0.0217, +0.0295], which straddles zero. The other five names are
-  negative with intervals excluding zero. One reversal in two symbol-days leaves
-  the cross-listing question open (§7 item 13).
+- Every qualitative H1, H3, H4 and H5 conclusion repeats. Magnitudes are larger
+  on 03-27 and the 60 s H1 intervals do not overlap. Two days cannot say whether
+  that difference is noise or regime.
 - **There is no interval over days.** The spec's session-level bootstrap is
   degenerate at two sessions; see amendment AG. Cross-day statements in this
   repository are side-by-side point estimates.
 
 **Cross-day transfer** (`results/transfer-2019-12-30-2019-03-27`, twelve
 symbol-day books). A per-(horizon, queue-ahead stratum) calibration learned on
-one book and applied to another cuts the absolute error in 64% (336 / 528) of
-pair cases and in 10 of 12 same-symbol cross-day pairs at 60 s. It is not a
+one book and applied to another cuts the absolute error in 68% (358 / 528) of
+pair cases and in 9 of 12 same-symbol cross-day pairs at 60 s. It is not a
 fix: carried from 12-30 to 03-27 it under-corrects, carried the other way it
-over-corrects and flips the sign (AAPL +0.20, INTC +0.28), and on SAP the
-pooled calibration worsens the error on both days with intervals excluding zero.
+over-corrects and flips the sign (AAPL +0.21, INTC +0.29), and SAP gets worse
+in both cross-day directions.
+
+**Robustness and correction.** At 60 s the bias moves by under 1% across
+0–20 ms of latency; at 100 ms it turns into a small overstatement from 1 ms up.
+IPCW on queue position and order age removes 2% of it at 60 s.
 
 ---
 
@@ -332,25 +315,27 @@ pooled calibration worsens the error on both days with intervals excluding zero.
 ### Passing
 
 ```
-253 tests collected
+268 tests collected
 CI selection (-m "not needs_lobster and not needs_itch"):
-  245 passed, 1 xfailed, 7 deselected   on 3.11 (locked), 3.12 and 3.13 (latest)
+  261 passed, 7 deselected   on 3.11 (locked), checked locally on 2026-10-04
 ruff check   clean        ruff format --check   clean
-mypy (strict, python/shadowfill)   clean, 23 source files
+mypy (strict, python/shadowfill)   clean, 24 source files
+make test-cpp   all Catch2 cases pass
 ```
 
-The one `xfail` is strict and deliberate: it pins the trade-through gap
-(§7, `IDEAS.md`).
+The strict `xfail` that pinned the trade-through gap is now an ordinary
+passing test.
 
 | check | status |
 |---|---|
-| **Placebo** (`make placebo`) | **passes** — −0.0000, −0.0002, −0.0015 at 100 ms / 1 s / 10 s. This gates everything |
+| **Placebo** (`make placebo`) | **passes** — −0.0001, −0.0007, −0.0037 at 100 ms / 1 s / 5 s against a 0.02 tolerance. This gates everything |
 | **Known-bias injection** (`make injection`) | **passes** — an injected picked-off canceller is recovered with the right sign, monotone in strength. The opposite mechanism does *not* reverse sign; pinned as a negative result, amendment Y |
-| C++ / Python engine equivalence, synthetic | passes, five independent seeds |
-| C++ / Python engine equivalence, **real ITCH data** | passes — all ten outcome fields and all three diagnostics byte-identical |
+| C++ / Python engine equivalence, synthetic | passes, five independent seeds, all three L2 cancel models |
+| C++ / Python engine equivalence, **real ITCH data** | passes — a 15-minute AAPL slice, 55,804 shadows, every outcome field and diagnostic identical |
+| Trade-through credit, cross-checked | the measurement module credits **zero** further shadows on the fixed engine's output, on all four books it was run on |
 | Prefix invariance (no look-ahead) | passes |
-| ITCH parser layout tests (synthetic binary) | 44 passing across parser + dataset + real-sample |
-| Benchmark | passes. Gated on **speedup over the Python reference** (≥200×, observed ~900–1270×), not absolute events/s |
+| ITCH parser layout tests (synthetic binary) | passing across parser + dataset + real-sample |
+| Benchmark | passes. Gated on **speedup over the Python reference** (≥200×); 258–310× observed on 2026-10-04, down from 1,090–1,224× before the trade-through fix (amendment AI) |
 
 ### Skipped, not failing
 
@@ -360,8 +345,7 @@ passing.** `needs_itch` tests run when a sample is present.
 
 ### Failing
 
-**None.** The strict `xfail` above is a known limitation, not a failure; it
-turns into one when the engine is fixed.
+**None.**
 
 ---
 
@@ -416,34 +400,29 @@ turns into one when the engine is fixed.
 11. **Plan 4's impact stress test does not exist.** The latency sweep has run
     (amendment AA); cross-book transfer has now run on both sessions (amendment AG). Known-bias injection exists (amendment Y) but
     recovers only one of the two mechanisms H2 names.
-12. **Trade-through fills are not credited.** The engine matches an execution
-    against a shadow only at the shadow's own price, so a shadow left alone at
-    a better price than the level an aggressor trades through is not filled.
-    It can only lower the computed truth. **Sized on 2026-10-04 (amendment
-    AH) and large**: crediting it raises AAPL's 60 s F* by +0.120 (12-30) and
-    +0.104 (03-27), so the H1 understatement is about −0.39 and −0.47, not
-    −0.27 and −0.37. Checked on 300 sampled shadows against a book replay.
-    Not fixed; pinned by a strict `xfail`. A second missed-fill route, an
-    opposite-side order arriving at or through a lone shadow's price, is not
-    credited or measured either. Fixing it changes every committed result, so
-    it must ship with a rerun.
+12. **Opposite-side fills are not credited.** Trade-throughs are credited
+    since 2026-10-04 (amendment AI). A new order on the opposite side arriving
+    at or through a lone shadow's price would also have filled it; that route
+    is neither credited nor measured, so the truth is still a lower bound and
+    measured understatements are conservative on this account. Crediting it
+    leans harder on the no-impact assumption (item 6).
 
 ### Open research questions
 
 13. **Why does SAP reverse sign?** Cross-listing and fragmented liquidity is
-    the obvious candidate. Untested. On 2019-03-27 SAP does not reverse (error
-    −0.0026, interval straddling zero), so the reversal is one of two
-    symbol-days. It is still the most interesting open thread in the project.
+    the obvious candidate. Untested. SAP is positive on 2019-12-30 (+0.054) and
+    negative on 2019-03-27 (−0.092), both intervals clear of zero, so the
+    reversal is one of two symbol-days. Still the most interesting open thread.
 14. **Does the tick-regime prediction hold over a wider range?** 0.35–2.10 bps
     may be too narrow to contain the regimes H2 is about.
 15. **Is the H1 bias stable across days and across regimes?** Partly answered:
     on two days its sign and the qualitative H3–H5 conclusions repeat, and its
-    size does not (AAPL 60 s error −0.269 and −0.371). Whether the spread is
+    size does not (AAPL 60 s error −0.389 and −0.475). Whether the spread is
     noise, regime or tick is untested, and two days cannot say.
 16. **Would a correct competing-risks or IPCW estimator close the gap?**
     Aalen–Johansen answers a different question (fills under *their*
-    cancellation policies). IPCW on queue position and order age removes 3% of
-    the bias at 60 s (amendment AC); whether a richer censoring model would do
+    cancellation policies). IPCW on queue position and order age removes 2% of
+    the bias at 60 s (amendments AC, AI); whether a richer censoring model would do
     better is open, and the injection results say a residual is a lower bound
     on what the correction misses, not a measure of hidden information.
 
@@ -470,7 +449,8 @@ inside a bin.
 Fix: `place_matched_to_orders` puts one shadow on each real order at that
 order's own time, price, side and size. Populations are then identical by
 construction and the only difference is that the shadow never cancels. The
-placebo then reads −0.0000 / −0.0002 / −0.0015. Amendment X.
+placebo then read −0.0000 / −0.0002 / −0.0015 (−0.0001 / −0.0007 / −0.0037
+at 100 ms / 1 s / 5 s on the current engine). Amendment X.
 
 **All AAPL numbers published before that fix are withdrawn.**
 
@@ -490,7 +470,29 @@ instability was small-sample noise and the claim was overstated.
 ### Retracted: "the sign flips across horizon" (H1)
 
 An artefact of the grid design. Under matched placement AAPL's error is
-−0.0031 → −0.0134 → −0.0974 → −0.2688, monotone and never flipping.
+−0.0067 → −0.0387 → −0.2119 → −0.3887, monotone and never flipping.
+
+### Changed by crediting trade-throughs (2026-10-04, amendment AI)
+
+Both engines missed fills where an aggressor traded through a lone shadow's
+price. It was measured (+0.12 at 60 s), fixed and every result rerun. Retracted
+or changed as a result:
+
+- **Retracted (H3): "the markout gap is 5%; the whole edge error is the
+  fill-rate error, priced."** The missing fills were the adversely selected
+  ones. Markout is now −0.415 vs −0.190 bps, and edge error +0.199 bps, not
+  +0.056.
+- **Changed verdict (H4): supported → not supported.** The front-model error at
+  1 s (0.0149) had looked the same size as the H1 bias (0.0134). Now it is 0.0081
+  against 0.0387, and 0.005 against 0.389 at 60 s.
+- **Retracted (H5): "the estimator understates what the choice is worth by
+  2.8×".** With the fills restored both value it at 0.046 bps. Rankings still
+  never invert.
+- **Retracted (latency): "at 1 s the bias flips sign with any latency".** At 1 s
+  it now stays negative at every latency; the flip appears at 100 ms instead.
+- **Changed (H1, H2): the headline grows** from −0.269 to −0.389 at 60 s; SAP's
+  12-30 reversal shrinks from +0.081 to +0.054, and SAP 03-27 moves from −0.003
+  (interval including zero) to −0.092 (excluding it).
 
 ### Changed: Plan 2's data source, twice
 
@@ -524,12 +526,10 @@ In priority order.
    roughly ten, the session-level bootstrap `RESEARCH-SPEC.md` §6 specifies
    becomes meaningful and can be implemented. Fetch with exactly one fetcher
    process (amendment AG).
-2. **Fix the trade-through gap** (§7 item 12) in both engines and rerun
-   everything. Sized (amendment AH): it moves AAPL's 60 s truth by about
-   +0.1, which makes it the largest known error in the committed numbers. The
-   opposite-side route should be decided at the same time.
+2. **Measure the opposite-side route** (§7 item 12) the way the trade-through
+   gap was measured before it was fixed, then decide whether to credit it.
 3. **Investigate SAP's sign reversal.** The most interesting open question.
-   The second day did not reproduce it, so it is not yet established as a
+   SAP is positive on one day and negative on the other, so it is not yet established as a
    property of SAP, of cross-listing, or of one symbol-day; more sessions and
    another cross-listed name are needed.
 4. **Build the impact stress test**, the last missing Plan 4 failure test.
@@ -664,8 +664,6 @@ experiment listed above completed and wrote its manifest.
 **Pending, in the sense of owed:**
 
 - `fetch_itch_parallel.sh` has no concurrency guard (`docs/IDEAS.md`).
-- Every committed H1–H5 number predates crediting trade-throughs, which is
-  sized and is not small (§7 item 12).
 - `plan-2a-recorder` remains parked and unmerged, by decision.
 - The two `needs_lobster` definition-of-done items remain unchecked, by
   external blockage.

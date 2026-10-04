@@ -12,9 +12,9 @@ arithmetic, whether a limit order that was *never actually sent* would have been
 filled, and when. That number is a ground truth, so it can be used to grade the
 fill models that trading backtests rely on. On one full day of Apple stock on
 Nasdaq, the standard model says 16% of passive orders fill within a minute.
-The computed answer is 43%.
+The computed answer is 55%.
 
-![Share of passive AAPL orders filled within 100 ms, 1 s, 10 s and 60 s: computed truth 1.7%, 5.1%, 20.6%, 43.3%; Kaplan–Meier estimate 1.4%, 3.7%, 10.8%, 16.4%](docs/img/h1-aapl-2019-12-30.png)
+![Share of passive AAPL orders filled within 100 ms, 1 s, 10 s and 60 s: computed truth 2.1%, 7.6%, 32.0%, 55.3%; Kaplan–Meier estimate 1.4%, 3.7%, 10.8%, 16.4%](docs/img/h1-aapl-2019-12-30.png)
 
 <sub>Generated from <code>results/h1-aapl-2019-12-30/manifest.json</code> by
 <code>scripts/plot_h1.py</code>; every number on it is read from that manifest.</sub>
@@ -139,37 +139,46 @@ way they came out.
 
 | question | answer | verdict |
 |---|---|---|
-| Does treating cancellation as censoring bias the fill curve? (H1) | Kaplan–Meier says 16% of passive orders fill within a minute; the truth is **43%** (12% vs 49% on the second day) | **yes**, on both days; every interval excludes zero |
-| Does the sign depend on tick regime? (H2) | the sign flips for SAP on 12-30, but not along the tick axis, and not at all on 03-27 | **not supported** |
-| Does adverse selection offset it? (H3) | the offset is absent; edge error is 0.056 bps at 60 s, all of it from the fill rate | **not supported** |
-| What does an L2 feed cost? (H4) | even the expected-value L2 model promises **25%** more fills than it gets at 1 s; the three standard heuristics bracket the truth | **yes** |
-| Does correcting the bias change the decision? (H5) | policy rankings do not invert (0 of 10 pairs) | **not supported** |
-| Is it an artefact of assuming zero latency? | at 60 s the bias is −0.269 at 0 ms and −0.253 at 20 ms; at 1 s it flips sign | **headline robust** |
-| Does standard reweighting (IPCW) fix it? | on queue position and order age, it removes 3% at 60 s | **no** |
-| Does a correction learned on one book transfer to another? | it cuts the absolute error in 64% of cases, but over- or under-shoots across days and fails on SAP | **partly, not reliably** |
+| Does treating cancellation as censoring bias the fill curve? (H1) | Kaplan–Meier says 16% of passive orders fill within a minute; the truth is **55%** (12% vs 59% on the second day) | **yes**, on both days; every interval excludes zero |
+| Does the sign depend on tick regime? (H2) | the sign flips for SAP on 12-30, but not along the tick axis, and SAP is negative on 03-27 | **not supported** |
+| Does adverse selection offset it? (H3) | the opposite: the missed fills are the worst ones, so the markout bias *adds* to the error; expected edge is wrong by 0.199 bps at 60 s (true 0.230, estimated 0.031) | **not supported** |
+| What does an L2 feed cost? (H4) | the expected-value L2 model promises 8% more fills than it gets at 1 s, and the heuristics bracket the truth -- but that is an order of magnitude below the cancellation bias | **not supported** |
+| Does correcting the bias change the decision? (H5) | policy rankings do not invert (0 of 10 pairs): fill rate and markout errors nearly cancel in edge | **not supported** |
+| Is it an artefact of assuming zero latency? | at 60 s the bias is −0.389 at 0 ms and −0.386 at 20 ms; at 100 ms it flips sign | **headline robust** |
+| Does standard reweighting (IPCW) fix it? | on queue position and order age, it removes 2% at 60 s | **no** |
+| Does a correction learned on one book transfer to another? | it cuts the absolute error in 68% of cases, but over- or under-shoots across days and fails on SAP | **partly, not reliably** |
 
-Three of the five pre-registered hypotheses came back negative, and they are
-reported as such. The effects they were meant to explain are large. On the
-second day every H1, H3, H4 and H5 conclusion has the same direction and a
-larger magnitude; the side-by-side comparison is in
+Four of the five pre-registered hypotheses came back negative, and they are
+reported as such. The effect they were meant to explain is large. On the
+second day every H1, H3, H4 and H5 conclusion has the same direction; the
+side-by-side comparison is in
 [docs/RESULTS.md](docs/RESULTS.md#a-second-session--2019-03-27).
+
+**These numbers changed once, and why.** The engine originally missed fills
+where the market traded straight through a shadow's price after the real
+orders there were pulled. That was measured (+0.12 at 60 s), checked against a
+book replay, fixed in both engines and every experiment rerun. It made the
+headline larger and changed the verdicts on H3 and H4; every change is listed
+in [docs/RESULTS.md](docs/RESULTS.md#what-crediting-trade-throughs-changed).
 
 The headline, in one table -- fraction of passive orders filled within each
 horizon:
 
 | horizon | never-cancel truth | Kaplan–Meier | error | 95% CI |
 |---|---|---|---|---|
-| 100 ms | 0.0172 | 0.0140 | −0.0031 | [−0.0037, −0.0024] |
-| 1 s | 0.0506 | 0.0372 | −0.0134 | [−0.0172, −0.0082] |
-| 10 s | 0.2059 | 0.1085 | −0.0974 | [−0.1176, −0.0665] |
-| 60 s | 0.4331 | 0.1644 | **−0.2688** | [−0.2925, −0.2253] |
+| 100 ms | 0.0207 | 0.0140 | −0.0067 | [−0.0081, −0.0049] |
+| 1 s | 0.0760 | 0.0372 | −0.0387 | [−0.0494, −0.0244] |
+| 10 s | 0.3204 | 0.1085 | −0.2119 | [−0.2437, −0.1659] |
+| 60 s | 0.5531 | 0.1644 | **−0.3887** | [−0.4183, −0.3371] |
 
 **Why it understates.** Real orders are cancelled within seconds, so by 60 s
 the orders still being watched are almost entirely ones nobody bothered to
 pull -- and nobody pulls an order that was never going to fill. The survivors
 are selected for *not* filling, and the estimator extrapolates their fill rate
-to everyone. The cancelled orders would in fact have filled at nearly three
-times that rate.
+to everyone. The never-cancel population in fact fills at 3.4 times that rate.
+Much of the difference is orders pulled just before the market moved through
+their price: a never-cancel order is filled when that happens, and its
+pulled twin is not.
 
 **Every experiment in full** -- tables, reasoning, negative results and the
 command that reproduces each one -- is in **[docs/RESULTS.md](docs/RESULTS.md)**.
@@ -584,20 +593,16 @@ models the market reacting to an order that was never sent. That is defensible
 at small sizes and is not yet stress-tested; it is the assumption most likely
 to matter.
 
-**Trades through a better-priced shadow are not credited.** The engine matches
-an execution against a shadow only at the shadow's own price. If the real
-orders at that price are cancelled and an aggressor then trades through to a
-worse price, the shadow -- which would have been first in line -- is not
-filled. This can only *lower* the computed truth, so it makes the measured
-understatements conservative. **It is large.** Measured without changing the
-engine (amendment AH), crediting trade-throughs would raise AAPL's
-never-cancel 60 s fill rate from 0.433 to about 0.553 on 2019-12-30 and from
-0.491 to about 0.595 on 2019-03-27 -- roughly 23% of shadows get an earlier
-fill. The H1 understatement would grow from −0.27 to about −0.39 at 60 s. These
-are point estimates without intervals, and H3–H5 have not been recomputed. It
-is pinned by a strict `xfail` test and written up in
-[docs/IDEAS.md](docs/IDEAS.md); fixing it changes every committed number, so
-the fix must ship with a rerun.
+**Trades through a lone shadow are credited; orders arriving at its price are
+not.** When the real orders at a shadow's price are gone and an aggressor
+trades through to a worse price, the shadow -- first in line under price
+priority -- is filled. Until 2026-10-04 it was not; that gap was measured,
+fixed in both engines and every result rerun (amendments AH, AI). A shadow with
+real orders still ahead of it is not credited, because that means the data
+itself shows a price-priority breach. One related route remains: a new order on
+the opposite side arriving at or through a lone shadow's price would also have
+filled it. That is neither credited nor measured, so the computed truth is
+still a lower bound and the measured understatements are conservative.
 
 **Orders whose ids predate the recording window are assumed to be ahead.** They
 cannot be resolved either way. The count is reported per run and per row, so
@@ -643,9 +648,12 @@ In priority order, from [docs/CURRENT-STATUS.md](docs/CURRENT-STATUS.md):
 
 1. **More sessions.** Two are in hand, of 15 published. With roughly ten,
    the across-session bootstrap the spec pre-registered becomes meaningful.
-2. **Size the trade-through gap**, then fix it in both engines and rerun.
+2. **Measure the opposite-side route** -- a new order arriving at or through a
+   lone shadow's price -- the way the trade-through gap was measured before it
+   was fixed.
 3. **Investigate SAP's sign reversal** in H2 -- the most interesting open
-   question. It appeared on 2019-12-30 and not on 2019-03-27; venue
+   question. SAP is positive on 2019-12-30 and negative on 2019-03-27, both
+   intervals clear of zero; venue
    fragmentation of cross-listed names is the obvious candidate, not a
    finding.
 4. **Impact stress test** for the no-reaction assumption.
