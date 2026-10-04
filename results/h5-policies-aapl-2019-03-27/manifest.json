@@ -1,5 +1,5 @@
 {
-  "git_sha": "3d7f6842921510f743bc4d576dd59c95e0b47251-dirty",
+  "git_sha": "0ae5196f8c7d95f14b634ae6053a09783cf4e103",
   "experiment": "H5-decision-relevance",
   "input_path": "data/parquet/date=2019-03-27/symbol=AAPL/events.parquet",
   "input_format": "parquet",
@@ -24,10 +24,10 @@
   "inverted_pairs": 0,
   "pairs": 10,
   "inversion_rate_lo": 0.0,
-  "inversion_rate_hi": 0.0,
+  "inversion_rate_hi": 0.7,
   "best_policy_true_ns": 60000000000,
   "best_policy_estimated_ns": 60000000000,
-  "best_policy_disagreement_rate": 0.0,
+  "best_policy_disagreement_rate": 0.06,
   "config": {
     "horizon_ns": 60000000000,
     "markout_ns": 1000000000,
@@ -51,45 +51,45 @@
   "rows": [
     {
       "wait_ns": 100000000,
-      "true_fill_rate": 0.018876765738131573,
-      "true_markout_bps": -0.03930494567719211,
-      "true_edge_bps": -0.5213145794564765,
+      "true_fill_rate": 0.021339784171326204,
+      "true_markout_bps": -0.11132671155870714,
+      "true_edge_bps": -0.521641468136538,
       "est_fill_rate": 0.015154327346475926,
       "est_markout_bps": -0.044741502451076165,
       "est_edge_bps": -0.5232257392930026
     },
     {
       "wait_ns": 1000000000,
-      "true_fill_rate": 0.06108655538013419,
-      "true_markout_bps": -0.15556992698753144,
-      "true_edge_bps": -0.5076798344622196,
+      "true_fill_rate": 0.08763397513547566,
+      "true_markout_bps": -0.3515454144245918,
+      "true_edge_bps": -0.5148981720374464,
       "est_fill_rate": 0.04072999228091456,
       "est_markout_bps": -0.15545378238144267,
       "est_edge_bps": -0.5153091915618182
     },
     {
       "wait_ns": 5000000000,
-      "true_fill_rate": 0.17037123239652685,
-      "true_markout_bps": -0.18358531033835895,
-      "true_edge_bps": -0.4714690746858829,
+      "true_fill_rate": 0.2622681053172917,
+      "true_markout_bps": -0.4688968057476167,
+      "true_edge_bps": -0.5144086791051131,
       "est_fill_rate": 0.07369597715824305,
       "est_markout_bps": -0.18406709210031996,
       "est_edge_bps": -0.5050511945061735
     },
     {
       "wait_ns": 30000000000,
-      "true_fill_rate": 0.39425097877292725,
-      "true_markout_bps": -0.1916548398352623,
-      "true_edge_bps": -0.3969635258321327,
+      "true_fill_rate": 0.5149761646982425,
+      "true_markout_bps": -0.4813436557394676,
+      "true_edge_bps": -0.5052285414116036,
       "est_fill_rate": 0.1088818684758438,
       "est_markout_bps": -0.19689207711427728,
       "est_edge_bps": -0.49425494096486133
     },
     {
       "wait_ns": 60000000000,
-      "true_fill_rate": 0.49089884756418445,
-      "true_markout_bps": -0.19540098202340384,
-      "true_edge_bps": -0.3660452942829118,
+      "true_fill_rate": 0.5947419551097635,
+      "true_markout_bps": -0.46820516749088614,
+      "true_edge_bps": -0.4934864834743353,
       "est_fill_rate": 0.12004799900567253,
       "est_markout_bps": -0.19849280130239236,
       "est_edge_bps": -0.4907210077500239

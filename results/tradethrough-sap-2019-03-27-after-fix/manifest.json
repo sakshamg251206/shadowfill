@@ -1,0 +1,79 @@
+{
+  "git_sha": "0ae5196f8c7d95f14b634ae6053a09783cf4e103",
+  "experiment": "trade-through-sizing",
+  "input_path": "data/parquet/date=2019-03-27/symbol=SAP/events.parquet",
+  "input_sha256": "276b08f03a627ad35330ec2ef4b783e934b270d2c5b29d31d718f3d62437d4f8",
+  "n_events": 258623,
+  "n_executions": 2238,
+  "n_hidden_executions": 302,
+  "n_shadows_activated": 111987,
+  "n_shadows_credited_earlier_fill": {
+    "lower": 0,
+    "upper": 0
+  },
+  "engine": "cpp",
+  "diagnostics": {
+    "unknown_order_assumed_ahead": 8,
+    "fifo_violations": 6,
+    "unknown_order_events": 75
+  },
+  "environment": {
+    "python": "3.11.13",
+    "platform": "macOS-26.7-arm64-arm-64bit",
+    "numpy": "2.4.6",
+    "pandas": "3.0.6",
+    "pyarrow": "25.0.1",
+    "compiler": "clang 21.0.0 (clang-2100.3.34.2)"
+  },
+  "config": {
+    "placement": "matched",
+    "horizon_ns": 60000000000,
+    "horizons_ns": [
+      100000000,
+      1000000000,
+      10000000000,
+      60000000000
+    ],
+    "window_ns": [
+      34200000000000,
+      57600000000000
+    ],
+    "lower_bound": "credited only after queue-ahead reached zero (ahead_lt_1_ts)",
+    "upper_bound": "any worse-priced execution in the live window",
+    "executions_counted": "EXECUTE and EXECUTE_HIDDEN"
+  },
+  "rows": [
+    {
+      "horizon_ns": 100000000,
+      "truth_engine": 0.003411128845545841,
+      "truth_lower": 0.003411128845545841,
+      "delta_lower": 0.0,
+      "truth_upper": 0.003411128845545841,
+      "delta_upper": 0.0
+    },
+    {
+      "horizon_ns": 1000000000,
+      "truth_engine": 0.007251039282291427,
+      "truth_lower": 0.007251039282291427,
+      "delta_lower": 0.0,
+      "truth_upper": 0.007251039282291427,
+      "delta_upper": 0.0
+    },
+    {
+      "horizon_ns": 10000000000,
+      "truth_engine": 0.03833510995042744,
+      "truth_lower": 0.03833510995042744,
+      "delta_lower": 0.0,
+      "truth_upper": 0.03833510995042744,
+      "delta_upper": 0.0
+    },
+    {
+      "horizon_ns": 60000000000,
+      "truth_engine": 0.18352202929236772,
+      "truth_lower": 0.18352202929236772,
+      "delta_lower": 0.0,
+      "truth_upper": 0.18352202929236772,
+      "delta_upper": 0.0
+    }
+  ]
+}

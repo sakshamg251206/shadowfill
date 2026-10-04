@@ -1,5 +1,5 @@
 {
-  "git_sha": "3d7f6842921510f743bc4d576dd59c95e0b47251-dirty",
+  "git_sha": "0ae5196f8c7d95f14b634ae6053a09783cf4e103",
   "experiment": "H3-passive-edge",
   "input_path": "data/parquet/date=2019-03-27/symbol=AAPL/events.parquet",
   "input_format": "parquet",
@@ -42,54 +42,54 @@
     {
       "horizon_ns": 100000000,
       "markout_ns": 1000000000,
-      "true_fill_rate": 0.018876765738131573,
-      "true_markout_bps": -0.03930494567719211,
-      "true_edge_bps": -0.0007419502518983427,
+      "true_fill_rate": 0.021339784171326204,
+      "true_markout_bps": -0.11132671155870714,
+      "true_edge_bps": -0.0023756879971662966,
       "est_fill_rate": 0.015154327346475926,
       "est_markout_bps": -0.044741502451076165,
       "est_edge_bps": -0.0006780273741167632,
-      "edge_error_bps": 6.392287778157952e-05,
-      "edge_error_lo": -8.894107815622853e-05,
-      "edge_error_hi": 0.0002593594833153228
+      "edge_error_bps": 0.0016976606230495335,
+      "edge_error_lo": 0.000715453660432796,
+      "edge_error_hi": 0.0027900764045280147
     },
     {
       "horizon_ns": 1000000000,
       "markout_ns": 1000000000,
-      "true_fill_rate": 0.06108655538013419,
-      "true_markout_bps": -0.15556992698753144,
-      "true_edge_bps": -0.009503230960407272,
+      "true_fill_rate": 0.08763397513547566,
+      "true_markout_bps": -0.3515454144245918,
+      "true_edge_bps": -0.030807322106675167,
       "est_fill_rate": 0.04072999228091456,
       "est_markout_bps": -0.15545378238144267,
       "est_edge_bps": -0.006331631356435132,
-      "edge_error_bps": 0.0031715996039721403,
-      "edge_error_lo": 0.0018072075881861416,
-      "edge_error_hi": 0.004561195759021945
+      "edge_error_bps": 0.024475690750240035,
+      "edge_error_lo": 0.015843325436659936,
+      "edge_error_hi": 0.032950327665291004
     },
     {
       "horizon_ns": 10000000000,
       "markout_ns": 1000000000,
-      "true_fill_rate": 0.24662341077016758,
-      "true_markout_bps": -0.18734660774848735,
-      "true_edge_bps": -0.04620405939915266,
+      "true_fill_rate": 0.3624260862254922,
+      "true_markout_bps": -0.48318323927496687,
+      "true_edge_bps": -0.17511821034018177,
       "est_fill_rate": 0.088237754242246,
       "est_markout_bps": -0.19477375884155668,
       "est_edge_bps": -0.017186399065499767,
-      "edge_error_bps": 0.029017660333652894,
-      "edge_error_lo": 0.023258146001572534,
-      "edge_error_hi": 0.033628836860443635
+      "edge_error_bps": 0.157931811274682,
+      "edge_error_lo": 0.128157542572484,
+      "edge_error_hi": 0.17845510555706423
     },
     {
       "horizon_ns": 60000000000,
       "markout_ns": 1000000000,
-      "true_fill_rate": 0.49089884756418445,
-      "true_markout_bps": -0.19540098202340384,
-      "true_edge_bps": -0.09592211688819886,
+      "true_fill_rate": 0.5947419551097635,
+      "true_markout_bps": -0.46820516749088614,
+      "true_edge_bps": -0.2784612567060239,
       "est_fill_rate": 0.12004799900567253,
       "est_markout_bps": -0.19849280130239236,
       "est_edge_bps": -0.023828663613382754,
-      "edge_error_bps": 0.07209345327481612,
-      "edge_error_lo": 0.06301015784427895,
-      "edge_error_hi": 0.07957522422538064
+      "edge_error_bps": 0.25463259309264114,
+      "edge_error_lo": 0.21729193054148827,
+      "edge_error_hi": 0.27799192785585314
     }
   ]
 }
