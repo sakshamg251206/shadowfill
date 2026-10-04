@@ -656,8 +656,6 @@ experiment listed above completed and wrote its manifest.
 
 **Pending, in the sense of owed:**
 
-- `README.md` still describes a one-session repository and its headline
-  figures; it has not been updated for 2019-03-27 and was outside this task.
 - `fetch_itch_parallel.sh` has no concurrency guard (`docs/IDEAS.md`).
 - `plan-2a-recorder` remains parked and unmerged, by decision.
 - The two `needs_lobster` definition-of-done items remain unchecked, by

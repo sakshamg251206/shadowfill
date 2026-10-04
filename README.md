@@ -130,24 +130,29 @@ flowchart TD
 ## What was found
 
 AAPL on Nasdaq, 2019-12-30, regular hours: 1,581,219 events, 791,477 real
-orders, each shadowed by a hypothetical order that never cancels. 95% intervals
-from a block bootstrap over half-hour blocks *within* that session. The
+orders, each shadowed by a hypothetical order that never cancels; every
+experiment was then rerun unchanged on a second session, 2019-03-27. 95%
+intervals from a block bootstrap over half-hour blocks *within* a session. The
 research questions were written down before the data was looked at
 ([`docs/RESEARCH-SPEC.md`](docs/RESEARCH-SPEC.md)), and are reported whichever
 way they came out.
 
 | question | answer | verdict |
 |---|---|---|
-| Does treating cancellation as censoring bias the fill curve? (H1) | Kaplan–Meier says 16% of passive orders fill within a minute; the truth is **43%** | **yes**, every interval excludes zero |
-| Does the sign depend on tick regime? (H2) | the sign flips for SAP, but not along the tick axis | **not supported** |
+| Does treating cancellation as censoring bias the fill curve? (H1) | Kaplan–Meier says 16% of passive orders fill within a minute; the truth is **43%** (12% vs 49% on the second day) | **yes**, on both days; every interval excludes zero |
+| Does the sign depend on tick regime? (H2) | the sign flips for SAP on 12-30, but not along the tick axis, and not at all on 03-27 | **not supported** |
 | Does adverse selection offset it? (H3) | the offset is absent; edge error is 0.056 bps at 60 s, all of it from the fill rate | **not supported** |
 | What does an L2 feed cost? (H4) | even the expected-value L2 model promises **25%** more fills than it gets at 1 s; the three standard heuristics bracket the truth | **yes** |
 | Does correcting the bias change the decision? (H5) | policy rankings do not invert (0 of 10 pairs) | **not supported** |
 | Is it an artefact of assuming zero latency? | at 60 s the bias is −0.269 at 0 ms and −0.253 at 20 ms; at 1 s it flips sign | **headline robust** |
 | Does standard reweighting (IPCW) fix it? | on queue position and order age, it removes 3% at 60 s | **no** |
+| Does a correction learned on one book transfer to another? | it cuts the absolute error in 64% of cases, but over- or under-shoots across days and fails on SAP | **partly, not reliably** |
 
 Three of the five pre-registered hypotheses came back negative, and they are
-reported as such. The effects they were meant to explain are large.
+reported as such. The effects they were meant to explain are large. On the
+second day every H1, H3, H4 and H5 conclusion has the same direction and a
+larger magnitude; the side-by-side comparison is in
+[docs/RESULTS.md](docs/RESULTS.md#a-second-session--2019-03-27).
 
 The headline, in one table -- fraction of passive orders filled within each
 horizon:
@@ -170,8 +175,10 @@ times that rate.
 command that reproduces each one -- is in **[docs/RESULTS.md](docs/RESULTS.md)**.
 Every number traces to a committed manifest in [`results/`](results).
 
-**What this is not.** One symbol and one day for most of it (six symbols for
-H2). The intervals cover variation within that session, not between sessions.
+**What this is not.** One symbol on two days for most of it (six symbols for
+H2 and the transfer test). The intervals cover variation within a session, not
+between sessions; two days are compared as point estimates side by side, which
+shows whether a direction repeats and nothing more.
 The shadow order is assumed not to change anyone else's behaviour. Every
 limitation is listed [below](#assumptions-and-limitations).
 
@@ -598,8 +605,11 @@ about 10% of shadow/order pairs start with slightly different queue-ahead. A
 test pins the exact-match share above 90%.
 
 **Uncertainty is within-session only.** The bootstrap resamples blocks of time
-within one session. Day-to-day variation needs more than one session and is not
-covered by any interval reported.
+within one session. The spec calls for resampling whole sessions, but with two
+sessions that has only three distinct outcomes and cannot produce a meaningful
+interval, so it is not implemented
+([amendment AG](docs/PLAN-AMENDMENTS.md)). Day-to-day variation is not covered
+by any interval reported.
 
 **Book reconstruction from ITCH is validated less strongly than from
 LOBSTER.** LOBSTER ships an orderbook file alongside its messages — a third
@@ -626,14 +636,13 @@ passive order would have filled and when. It never claims PnL.
 
 In priority order, from [docs/CURRENT-STATUS.md](docs/CURRENT-STATUS.md):
 
-1. **A second session.** Re-run H1–H5 on another day, converting the
-   within-session bootstrap into the across-session comparison the spec
-   pre-registered. A second day's file has been fetched and verified
-   (amendment AE); no result from it is reported yet.
+1. **More sessions.** Two are in hand, of 15 published. With roughly ten,
+   the across-session bootstrap the spec pre-registered becomes meaningful.
 2. **Size the trade-through gap**, then fix it in both engines and rerun.
 3. **Investigate SAP's sign reversal** in H2 -- the most interesting open
-   question; venue fragmentation of cross-listed names is the obvious candidate,
-   not a finding.
+   question. It appeared on 2019-12-30 and not on 2019-03-27; venue
+   fragmentation of cross-listed names is the obvious candidate, not a
+   finding.
 4. **Impact stress test** for the no-reaction assumption.
 5. **The remaining estimators** from the spec: cause-specific Cox, Fine–Gray,
    dependent-censoring bounds and an ML hazard baseline.
