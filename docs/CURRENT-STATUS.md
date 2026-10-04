@@ -66,9 +66,7 @@ on real exchange data, and 22 committed result directories, each pinning a
 manifest.
 
 **Repository:** `https://github.com/sakshamg251206/shadowfill.git`.
-`main` carries local, **unpushed** commits for the second session, the
-trade-through fix and the rerun (see `git log origin/main..main`); nothing from
-them is on `origin` yet.
+`main` is **in sync with `origin/main`**.
 
 **Parked:** branch `plan-2a-recorder` (not on `origin`) holds a complete, tested Coinbase L3
 recorder that has no venue to record from (amendment U). Deliberately unmerged:
